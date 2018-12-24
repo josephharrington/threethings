@@ -1,9 +1,6 @@
+
 import * as dat from 'dat.gui';
-
-import { Three, App } from './common.js';
-import growth from './growth.js';
-import * as math from './math.js';
-
+import { Three } from './common.js';
 
 let mesh, 
     wireframe, 
@@ -37,6 +34,9 @@ const params = {
     enableFog: true,
     enableShadows: false,
     showWireframe: true,
+
+    saveStl: saveStl,
+
 };
 
 const vals = {
@@ -47,30 +47,27 @@ const vals = {
 
 const HEIGHT_OFF_GROUND = 300;
 
-function initGui(gui) {
+function initGui() {
+    exporter = new Three.STLExporter();
+
+    const gui = new dat.GUI();
     gui.add(params, 'resolution', 1, 100).step(1).onChange(updateMath);
     // gui.add(params, 'bigR', 10, 1000).step(1).onChange(updateMath);
-    // gui.add(params, 'lilR', 10, 1000).step(1).onChange(updateMath);
-    // gui.add(params, 'lilP', 10, 1000).step(1).onChange(updateModel);
-
-    gui.add(params, 'bigR', 10, 1000).step(1).onChange(updateMath);
-    gui.add(params, 'loopRatio', 0, 5).onChange(updateMath);
-    // gui.add(params, 'spinRatio', 0.01, 1).onChange(updateMath);
-    gui.add(params, 'spinNumer', 0, 100).step(1).onChange(updateMath);
-    gui.add(params, 'spinDenom', 1, 100).step(1).onChange(updateMath);
-
+    // gui.add(params, 'loopRatio', 0, 5).onChange(updateMath);
+    // gui.add(params, 'spinNumer', 0, 100).step(1).onChange(updateMath);
+    // gui.add(params, 'spinDenom', 1, 100).step(1).onChange(updateMath);
     gui.add(params, 'extrusionSegments', 5, 10000).step(5).onChange(updateModel);
     gui.add(params, 'radiusSegments', 1, 32).step(1).onChange(updateModel);
     gui.add(params, 'radius', 1, 100).step(1).onChange(updateModel);
     gui.add(params, 'closed').onChange(updateModel);
     gui.add(params, 'showPts').onChange(updateModel);
-
-    gui.add(params, 'oscMagnitude', -200, 200).onChange(updateModel);
-    gui.add(params, 'oscillations', 0, 30).step(1).onChange(updateModel);
-
+    // gui.add(params, 'oscMagnitude', -200, 200).onChange(updateModel);
+    // gui.add(params, 'oscillations', 0, 30).step(1).onChange(updateModel);
     gui.add(params, 'enableFog').onChange(updateScene);
     gui.add(params, 'enableShadows').onChange(updateScene);
     gui.add(params, 'showWireframe').onChange(updateModel);
+    gui.add(params, 'saveStl');
+    gui.open();
 }
 
 function updateMath() {
@@ -78,7 +75,7 @@ function updateMath() {
     const { bigR, spinNumer, spinDenom, resolution } = params;
     const lilR = (spinNumer / spinDenom) * bigR;
     console.log(`lilR: ${lilR}`);
-    const lcm = math.calcLcm(bigR, lilR);
+    const lcm = calcLcm(bigR, lilR);
     vals.numRots = lcm / bigR;
     vals.numPts = lcm / lilR;
     vals.dt = vals.numRots * 2 * Math.PI / (vals.numPts * resolution);
@@ -139,9 +136,6 @@ function updateModel() {
             mesh.add(sphereMesh);
         }
     }
-
-    console.log('setting mesh');
-    app.mesh = mesh;  // todo: refactor into app
 }
 
 function updateScene() {
@@ -224,15 +218,41 @@ function animate() {
     }
 }
 
-let app;  // todo: refactor
-function main() {
+function saveStl() {
+    const result = exporter.parse(mesh);
+    saveString(result, 'box.stl');
+}
+
+function saveString(text, filename) {
+    save(new Blob([text], {type: 'text/plain'}), filename);
+}
+
+const link = document.createElement('a');
+link.style.display = 'none';
+document.body.appendChild(link);
+
+function save( blob, filename ) {
+    link.href = URL.createObjectURL( blob );
+    link.download = filename;
+    link.click();
+}
+
+function calcGcd(a, b) {
+    while (b > 0) {
+        var temp = b;
+        b = a % b;
+        a = temp;
+    }
+    return a;
+}
+
+function calcLcm(a, b) {
+    return a * (b / calcGcd(a, b));
+}
+
+export default function main() {
     init();
-    app = new App();
-    initGui(app.gui);
+    initGui();
     updateMath();
     startAnimating(30);
 }
-
-
-main();
-// growth();
