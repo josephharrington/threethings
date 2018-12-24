@@ -21,17 +21,18 @@ let mesh,
 const params = {
     resolution: 20,
     bigR: 252,
-    lilR: 231,
-    lilP: 60,
-    // ell: 0.26,  // lilp/lilr = 60/231
-    // kay: 0.912,  // lilR/bigR = 231/252
+    // lilR: 231,
+    // lilP: 60,
+    loopRatio: 60/231,  // lilp/lilr = 60/231
+    // spinRatio: 231/252,  // lilR/bigR = 231/252
+    spinNumer: 11,  // lilR/bigR = 231/252
+    spinDenom: 12,  // lilR/bigR = 231/252
     extrusionSegments: 500,
     radiusSegments: 8,
     radius: 10,
     closed: false,
     showPts: false,
     oscMagnitude: 50,
-    oscSpeed: 0.2,
     oscillations: 3,
 
     enableFog: true,
@@ -48,14 +49,22 @@ const vals = {
     dt: -1,
 };
 
+const HEIGHT_OFF_GROUND = 300;
+
 function initGui() {
     exporter = new THREE.STLExporter();
 
     const gui = new dat.GUI();
     gui.add(params, 'resolution', 1, 100).step(1).onChange(updateMath);
+    // gui.add(params, 'bigR', 10, 1000).step(1).onChange(updateMath);
+    // gui.add(params, 'lilR', 10, 1000).step(1).onChange(updateMath);
+    // gui.add(params, 'lilP', 10, 1000).step(1).onChange(updateModel);
+
     gui.add(params, 'bigR', 10, 1000).step(1).onChange(updateMath);
-    gui.add(params, 'lilR', 10, 1000).step(1).onChange(updateMath);
-    gui.add(params, 'lilP', 10, 1000).step(1).onChange(updateModel);
+    gui.add(params, 'loopRatio', 0, 5).onChange(updateMath);
+    // gui.add(params, 'spinRatio', 0.01, 1).onChange(updateMath);
+    gui.add(params, 'spinNumer', 0, 100).step(1).onChange(updateMath);
+    gui.add(params, 'spinDenom', 1, 100).step(1).onChange(updateMath);
 
     gui.add(params, 'extrusionSegments', 5, 10000).step(5).onChange(updateModel);
     gui.add(params, 'radiusSegments', 1, 32).step(1).onChange(updateModel);
@@ -64,7 +73,6 @@ function initGui() {
     gui.add(params, 'showPts').onChange(updateModel);
 
     gui.add(params, 'oscMagnitude', -200, 200).onChange(updateModel);
-    gui.add(params, 'oscSpeed', 0, Math.PI / 2).onChange(updateModel);
     gui.add(params, 'oscillations', 0, 30).step(1).onChange(updateModel);
 
     gui.add(params, 'enableFog').onChange(updateScene);
@@ -77,7 +85,10 @@ function initGui() {
 }
 
 function updateMath() {
-    const { bigR, lilR, ell, kay, resolution } = params;
+    // const { bigR, lilR, resolution } = params;
+    const { bigR, spinNumer, spinDenom, resolution } = params;
+    const lilR = (spinNumer / spinDenom) * bigR;
+    console.log(`lilR: ${lilR}`);
     const lcm = calcLcm(bigR, lilR);
     vals.numRots = lcm / bigR;
     vals.numPts = lcm / lilR;
@@ -93,11 +104,18 @@ function updateModel() {
         mesh.geometry.dispose();
     }
 
-    const { bigR, lilR, lilP } = params;
+    // const { bigR, lilR, lilP } = params;
+    const { bigR, loopRatio, spinNumer, spinDenom } = params;
+    const spinRatio = spinNumer / spinDenom;
+    if (vals.numPts > 1000) {
+        return;
+    }
     const points = [];
     for (let t = 0.0; t - vals.dt <= 2 * Math.PI * vals.numRots; t += vals.dt) {
-        const x = (bigR - lilR) * Math.cos(t) + lilP * Math.cos(t * (bigR - lilR) / lilR);
-        const y = (bigR - lilR) * Math.sin(t) - lilP * Math.sin(t * (bigR - lilR) / lilR);
+        // const x = (bigR - lilR) * Math.cos(t) + lilP * Math.cos(t * (bigR - lilR) / lilR);
+        // const y = (bigR - lilR) * Math.sin(t) - lilP * Math.sin(t * (bigR - lilR) / lilR);
+        const x = bigR * ((1 - spinRatio) * Math.cos(t) + loopRatio * spinRatio * Math.cos(t * (1 - spinRatio) / spinRatio));
+        const y = bigR * ((1 - spinRatio) * Math.sin(t) - loopRatio * spinRatio * Math.sin(t * (1 - spinRatio) / spinRatio));
         points.push(new THREE.Vector3(x, y, params.oscMagnitude * Math.cos( t * params.oscillations / vals.numRots )));
     }
 
@@ -116,7 +134,7 @@ function updateModel() {
     const tubeGeometry = new THREE.TubeBufferGeometry( 
         path, params.extrusionSegments, params.radius, params.radiusSegments, params.closed);
     mesh = new THREE.Mesh(tubeGeometry, meshMaterial);
-    mesh.position.set(0, 200, 0);
+    mesh.position.set(0, HEIGHT_OFF_GROUND, 0);
     if (params.showWireframe) {
         wireframe = new THREE.LineSegments(tubeGeometry, lineMaterial);
         mesh.add(wireframe);
@@ -136,7 +154,7 @@ function updateModel() {
 
 function updateScene() {
     // fog
-    scene.fog = params.enableFog ? new THREE.FogExp2( 0xa0a0a0, 0.001 ) : null;
+    scene.fog = params.enableFog ? new THREE.FogExp2( 0xa0a0a0, 0.0005 ) : null;
 
     // shadow
     renderer.shadowMap.enabled = params.enableShadows;
@@ -149,7 +167,7 @@ function init() {
     // camera
     camera = new THREE.PerspectiveCamera(50, window.innerWidth / window.innerHeight, 0.01, 10000);
     camera.position.set(0, 300, 300);
-    camera.lookAt(0, 200, 0);
+    camera.lookAt(0, HEIGHT_OFF_GROUND, 0);
 
     // scene
     scene = new THREE.Scene();
@@ -157,12 +175,12 @@ function init() {
 
     // light
     lights = [
-        [0, 200, 0], 
-        [100, 200, 100], 
-        [-100, -200, -100],
+        [0, HEIGHT_OFF_GROUND, 0, 1], 
+        [300, HEIGHT_OFF_GROUND, 300, 1.1], 
+        [-300, HEIGHT_OFF_GROUND, -300, 1.1],
 
-    ].map(([x, y, z]) => {
-        const light = new THREE.PointLight(0xffffff, 1, 0);
+    ].map(([x, y, z, intensity]) => {
+        const light = new THREE.PointLight(0xffffff, intensity, 0);
         light.position.set(x, y, z);
         scene.add(light);
         return light;
@@ -176,7 +194,7 @@ function init() {
 
     // controls
     controls = new THREE.OrbitControls(camera, renderer.domElement);
-    controls.target = new THREE.Vector3(0, 200, 0);
+    controls.target = new THREE.Vector3(0, HEIGHT_OFF_GROUND, 0);
     // controls.autoRotate = true;
     // controls.autoRotateSpeed = 0.5;
     controls.update();
@@ -191,10 +209,27 @@ function init() {
     updateScene();
 }
 
+
+var fpsInterval, startTime, now, then, elapsed;
+
+function startAnimating(fps) {
+    fpsInterval = 1000 / fps;
+    then = Date.now();
+    startTime = then;
+    animate();
+}
+
 function animate() {
     requestAnimationFrame(animate);
-    renderer.render(scene, camera);
-    // controls.update();
+
+    now = Date.now();
+    elapsed = now - then;
+
+    if (elapsed > fpsInterval) {
+        then = now - (elapsed % fpsInterval);
+        renderer.render(scene, camera);
+        // controls.update();
+    }
 }
 
 function saveStl() {
@@ -233,7 +268,7 @@ function main() {
     init();
     initGui();
     updateMath();
-    animate();
+    startAnimating(30);
 }
 
 
