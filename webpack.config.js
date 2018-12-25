@@ -37,21 +37,21 @@ module.exports = {
         new webpack.HotModuleReplacementPlugin()
 	],
 
-	optimization: {
-		splitChunks: {
-			cacheGroups: {
-				vendors: {
-					priority: -10,
-					test: /[\\/]node_modules[\\/]/
-				}
-			},
-
-			chunks: 'async',
-			minChunks: 1,
-			// minSize: 30000,
-			name: false
-		}
-	},
+	// optimization: {
+	// 	splitChunks: {
+	// 		cacheGroups: {
+	// 			vendors: {
+	// 				priority: -10,
+	// 				test: /[\\/]node_modules[\\/]/
+	// 			}
+	// 		},
+    //
+	// 		chunks: 'async',
+	// 		minChunks: 1,
+	// 		// minSize: 30000,
+	// 		name: false
+	// 	}
+	// },
 
     devtool: 'eval-source-map',
 

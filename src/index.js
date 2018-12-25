@@ -1,20 +1,8 @@
 import * as dat from 'dat.gui';
 
 import { Three, App } from './common.js';
-import growth from './growth.js';
+// import growth from './growth.js';
 import * as math from './math.js';
-
-
-let mesh, 
-    wireframe, 
-    scene, 
-    renderer, 
-    camera, 
-    exporter,
-    ground,
-    lights,
-    controls
-    ;
 
 // defaults
 const params = {
@@ -34,8 +22,6 @@ const params = {
     oscMagnitude: 50,
     oscillations: 3,
 
-    enableFog: true,
-    enableShadows: false,
     showWireframe: true,
 };
 
@@ -47,30 +33,27 @@ const vals = {
 
 const HEIGHT_OFF_GROUND = 300;
 
-function initGui(gui) {
-    gui.add(params, 'resolution', 1, 100).step(1).onChange(updateMath);
-    // gui.add(params, 'bigR', 10, 1000).step(1).onChange(updateMath);
-    // gui.add(params, 'lilR', 10, 1000).step(1).onChange(updateMath);
-    // gui.add(params, 'lilP', 10, 1000).step(1).onChange(updateModel);
+function initGui(gui, app) {
+    const resetMath = () => app.reset(updateMath);
+    const resetModel = () => app.reset(updateModel);
 
-    gui.add(params, 'bigR', 10, 1000).step(1).onChange(updateMath);
-    gui.add(params, 'loopRatio', 0, 5).onChange(updateMath);
-    // gui.add(params, 'spinRatio', 0.01, 1).onChange(updateMath);
-    gui.add(params, 'spinNumer', 0, 100).step(1).onChange(updateMath);
-    gui.add(params, 'spinDenom', 1, 100).step(1).onChange(updateMath);
+    gui.add(params, 'resolution', 1, 100).step(1).onChange(resetMath);
 
-    gui.add(params, 'extrusionSegments', 5, 10000).step(5).onChange(updateModel);
-    gui.add(params, 'radiusSegments', 1, 32).step(1).onChange(updateModel);
-    gui.add(params, 'radius', 1, 100).step(1).onChange(updateModel);
-    gui.add(params, 'closed').onChange(updateModel);
-    gui.add(params, 'showPts').onChange(updateModel);
+    gui.add(params, 'bigR', 10, 1000).step(1).onChange(resetMath);
+    gui.add(params, 'loopRatio', 0, 5).onChange(resetMath);
+    gui.add(params, 'spinNumer', 0, 100).step(1).onChange(resetMath);
+    gui.add(params, 'spinDenom', 1, 100).step(1).onChange(resetMath);
 
-    gui.add(params, 'oscMagnitude', -200, 200).onChange(updateModel);
-    gui.add(params, 'oscillations', 0, 30).step(1).onChange(updateModel);
+    gui.add(params, 'extrusionSegments', 5, 10000).step(5).onChange(resetModel);
+    gui.add(params, 'radiusSegments', 1, 32).step(1).onChange(resetModel);
+    gui.add(params, 'radius', 1, 100).step(1).onChange(resetModel);
+    gui.add(params, 'closed').onChange(resetModel);
+    gui.add(params, 'showPts').onChange(resetModel);
 
-    gui.add(params, 'enableFog').onChange(updateScene);
-    gui.add(params, 'enableShadows').onChange(updateScene);
-    gui.add(params, 'showWireframe').onChange(updateModel);
+    gui.add(params, 'oscMagnitude', -200, 200).onChange(resetModel);
+    gui.add(params, 'oscillations', 0, 30).step(1).onChange(resetModel);
+
+    gui.add(params, 'showWireframe').onChange(resetModel);
 }
 
 function updateMath() {
@@ -84,15 +67,10 @@ function updateMath() {
     vals.dt = vals.numRots * 2 * Math.PI / (vals.numPts * resolution);
     console.log("number of rotations: " + vals.numRots);
     console.log("number of graph points: " + vals.numPts);
-    updateModel();
+    return updateModel();
 }
 
 function updateModel() {
-    if (mesh !== undefined) {
-        scene.remove(mesh);
-        mesh.geometry.dispose();
-    }
-
     // const { bigR, lilR, lilP } = params;
     const { bigR, loopRatio, spinNumer, spinDenom } = params;
     const spinRatio = spinNumer / spinDenom;
@@ -122,13 +100,12 @@ function updateModel() {
 
     const tubeGeometry = new Three.TubeBufferGeometry( 
         path, params.extrusionSegments, params.radius, params.radiusSegments, params.closed);
-    mesh = new Three.Mesh(tubeGeometry, meshMaterial);
+    const mesh = new Three.Mesh(tubeGeometry, meshMaterial);
     mesh.position.set(0, HEIGHT_OFF_GROUND, 0);
     if (params.showWireframe) {
-        wireframe = new Three.LineSegments(tubeGeometry, lineMaterial);
+        const wireframe = new Three.LineSegments(tubeGeometry, lineMaterial);
         mesh.add(wireframe);
     }
-    scene.add(mesh);
 
     // points
     if (params.showPts) {
@@ -140,97 +117,15 @@ function updateModel() {
         }
     }
 
-    console.log('setting mesh');
-    app.mesh = mesh;  // todo: refactor into app
+    return mesh;
 }
 
-function updateScene() {
-    // fog
-    scene.fog = params.enableFog ? new Three.FogExp2( 0xa0a0a0, 0.0005 ) : null;
-
-    // shadow
-    renderer.shadowMap.enabled = params.enableShadows;
-    ground.receiveShadow = params.enableShadows;
-    lights.forEach(light => light.castShadow = params.enableShadows);
-    mesh && (mesh.castShadow = params.enableShadows);
-}
-
-function init() {
-    // camera
-    camera = new Three.PerspectiveCamera(50, window.innerWidth / window.innerHeight, 0.01, 10000);
-    camera.position.set(0, 300, 300);
-    camera.lookAt(0, HEIGHT_OFF_GROUND, 0);
-
-    // scene
-    scene = new Three.Scene();
-    scene.background = new Three.Color( 0xa0a0a0 );
-
-    // light
-    lights = [
-        [0, HEIGHT_OFF_GROUND, 0, 1], 
-        [300, HEIGHT_OFF_GROUND, 300, 1.1], 
-        [-300, HEIGHT_OFF_GROUND, -300, 1.1],
-
-    ].map(([x, y, z, intensity]) => {
-        const light = new Three.PointLight(0xffffff, intensity, 0);
-        light.position.set(x, y, z);
-        scene.add(light);
-        return light;
-    });
-
-    // renderer
-    renderer = new Three.WebGLRenderer({ antialias: true });
-    renderer.setPixelRatio(window.devicePixelRatio);
-    renderer.setSize(window.innerWidth, window.innerHeight);
-    document.body.appendChild(renderer.domElement);
-
-    // controls
-    controls = new Three.OrbitControls(camera, renderer.domElement);
-    controls.target = new Three.Vector3(0, HEIGHT_OFF_GROUND, 0);
-    // controls.autoRotate = true;
-    // controls.autoRotateSpeed = 0.5;
-    controls.update();
-
-    // permanent objects
-    ground = new Three.Mesh( 
-        new Three.PlaneBufferGeometry( 10000, 10000 ), 
-        new Three.MeshPhongMaterial( { color: 0x999999, depthWrite: false } ) );
-    ground.rotation.x = - Math.PI / 2;
-    scene.add( ground );
-
-    updateScene();
-}
-
-
-var fpsInterval, startTime, now, then, elapsed;
-
-function startAnimating(fps) {
-    fpsInterval = 1000 / fps;
-    then = Date.now();
-    startTime = then;
-    animate();
-}
-
-function animate() {
-    requestAnimationFrame(animate);
-
-    now = Date.now();
-    elapsed = now - then;
-
-    if (elapsed > fpsInterval) {
-        then = now - (elapsed % fpsInterval);
-        renderer.render(scene, camera);
-        // controls.update();
-    }
-}
-
-let app;  // todo: refactor
 function main() {
-    init();
-    app = new App();
-    initGui(app.gui);
-    updateMath();
-    startAnimating(30);
+    const app = new App();
+    app.HEIGHT_OFF_GROUND = HEIGHT_OFF_GROUND;
+    initGui(app.gui, app);
+    app.reset(updateMath);
+    app.startAnimating(30);
 }
 
 
