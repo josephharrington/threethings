@@ -19,14 +19,12 @@ const params = {
     enableShadows: false
 };
 
-const HEIGHT_OFF_GROUND = 300;
+const CAM_HEIGHT = 300;
 
 export function App() {
     this.exporter = new Three.STLExporter();
     this.gui = this._initGui();
     this.mesh = null;
-
-    this.HEIGHT_OFF_GROUND = HEIGHT_OFF_GROUND;
 
     this._initDownload();
     this._initScene();
@@ -50,14 +48,14 @@ App.prototype._setMesh = function(mesh) {
     if (mesh) {
         scene.add(mesh);
         this.mesh = mesh;
+        camera.lookAt(mesh.position);
     }
 };
 
 App.prototype._initScene = function() {
     // camera
     camera = new Three.PerspectiveCamera(50, window.innerWidth / window.innerHeight, 0.01, 10000);
-    camera.position.set(0, 300, 300);
-    camera.lookAt(0, HEIGHT_OFF_GROUND, 0);
+    camera.position.set(0, CAM_HEIGHT, CAM_HEIGHT);
 
     // scene
     scene = new Three.Scene();
@@ -65,9 +63,9 @@ App.prototype._initScene = function() {
 
     // light
     lights = [
-        [0, HEIGHT_OFF_GROUND, 0, 1],
-        [300, HEIGHT_OFF_GROUND, 300, 1.1],
-        [-300, HEIGHT_OFF_GROUND, -300, 1.1],
+        [0, CAM_HEIGHT, 0, 1],
+        [300, CAM_HEIGHT, 300, 1.1],
+        [-300, CAM_HEIGHT, -300, 1.1],
 
     ].map(([x, y, z, intensity]) => {
         const light = new Three.PointLight(0xffffff, intensity, 0);
@@ -84,7 +82,7 @@ App.prototype._initScene = function() {
 
     // controls
     controls = new Three.OrbitControls(camera, renderer.domElement);
-    controls.target = new Three.Vector3(0, HEIGHT_OFF_GROUND, 0);
+    controls.target = new Three.Vector3(0, CAM_HEIGHT, 0);
     // controls.autoRotate = true;
     // controls.autoRotateSpeed = 0.5;
     controls.update();
