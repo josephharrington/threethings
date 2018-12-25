@@ -30,16 +30,16 @@ const vals = {
 
 export const HEIGHT_OFF_GROUND = 300;
 
-export function initGui(gui, app) {
-    const resetMath = () => app.reset(updateMath);
-    const resetModel = () => app.reset(updateModel);
+export function createGui(gui, refreshWith) {
+    const resetAll = refreshWith(update);
+    const resetModel = refreshWith(updateModel);
 
-    gui.add(params, 'resolution', 1, 100).step(1).onChange(resetMath);
+    gui.add(params, 'resolution', 1, 100).step(1).onChange(resetAll);
 
-    gui.add(params, 'bigR', 10, 1000).step(1).onChange(resetMath);
-    gui.add(params, 'loopRatio', 0, 5).onChange(resetMath);
-    gui.add(params, 'spinNumer', 0, 100).step(1).onChange(resetMath);
-    gui.add(params, 'spinDenom', 1, 100).step(1).onChange(resetMath);
+    gui.add(params, 'bigR', 10, 1000).step(1).onChange(resetAll);
+    gui.add(params, 'loopRatio', 0, 5).onChange(resetAll);
+    gui.add(params, 'spinNumer', 0, 100).step(1).onChange(resetAll);
+    gui.add(params, 'spinDenom', 1, 100).step(1).onChange(resetAll);
 
     gui.add(params, 'extrusionSegments', 5, 10000).step(5).onChange(resetModel);
     gui.add(params, 'radiusSegments', 1, 32).step(1).onChange(resetModel);
@@ -53,7 +53,7 @@ export function initGui(gui, app) {
     gui.add(params, 'showWireframe').onChange(resetModel);
 }
 
-export function updateMath() {
+export function update() {
     // const { bigR, lilR, resolution } = params;
     const { bigR, spinNumer, spinDenom, resolution } = params;
     const lilR = (spinNumer / spinDenom) * bigR;

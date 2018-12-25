@@ -23,19 +23,31 @@ const CAM_HEIGHT = 300;
 
 export function App() {
     this.exporter = new Three.STLExporter();
-    this.gui = this._initGui();
+    this.gui = null;
     this.mesh = null;
 
     this._initDownload();
     this._initScene();
 }
 
-App.prototype.reset = function(genNewMesh) {
-    this._resetMesh();
+App.prototype.initGui = function(createGui) {
+    this.gui = new dat.GUI();
+
+    createGui(this.gui, (genMesh) => () => this.refreshMesh(genMesh));  // todo: something better
+
+    const sceneGui = this.gui.addFolder('Scene');
+    sceneGui.add(params, 'enableFog').onChange(this._updateScene);
+    sceneGui.add(params, 'enableShadows').onChange(this._updateScene);
+
+    this.gui.add(this, 'saveStl');
+};
+
+App.prototype.refreshMesh = function(genNewMesh) {
+    this._destroyMesh();
     this._setMesh(genNewMesh());
 };
 
-App.prototype._resetMesh = function() {
+App.prototype._destroyMesh = function() {
     if (this.mesh) {
         scene.remove(this.mesh);
         this.mesh.geometry.dispose();
@@ -44,7 +56,7 @@ App.prototype._resetMesh = function() {
 };
 
 App.prototype._setMesh = function(mesh) {
-    this._resetMesh();
+    this._destroyMesh();
     if (mesh) {
         scene.add(mesh);
         this.mesh = mesh;
@@ -94,11 +106,10 @@ App.prototype._initScene = function() {
     ground.rotation.x = - Math.PI / 2;
     scene.add( ground );
 
-    this.updateScene();
+    this._updateScene();
 };
 
-App.prototype.updateScene = function() {
-    console.log('updateScene');
+App.prototype._updateScene = function() {
     // fog
     scene.fog = params.enableFog ? new Three.FogExp2( 0xa0a0a0, 0.0005 ) : null;
 
@@ -121,7 +132,7 @@ App.prototype.startAnimating = function(fps) {
     fpsInterval = 1000 / fps;
     then = Date.now();
     startTime = then;
-    this.animate();
+    this._animate();
 };
 
 
@@ -138,15 +149,15 @@ function animate() {
     }
 }
 
-App.prototype.animate = animate;
+App.prototype._animate = animate;
 
 
 App.prototype._initGui = function() {
     const gui = new dat.GUI();
 
     // todo: append to end?
-    gui.add(params, 'enableFog').onChange(this.updateScene);
-    gui.add(params, 'enableShadows').onChange(this.updateScene);
+    gui.add(params, 'enableFog').onChange(this._updateScene);
+    gui.add(params, 'enableShadows').onChange(this._updateScene);
     gui.add(this, 'saveStl');
 
     gui.open();
