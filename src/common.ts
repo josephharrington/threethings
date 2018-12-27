@@ -79,6 +79,8 @@ export class App {
             scene.add(mesh);
             this.mesh = mesh;
             camera.lookAt(mesh.position);
+            controls.target = mesh.position;
+            controls.update();
         }
     };
 
@@ -113,10 +115,9 @@ export class App {
 
         // controls
         controls = new OrbitControls(camera, renderer.domElement);
-        controls.target = new Three.Vector3(0, CAM_HEIGHT, 0);
         // controls.autoRotate = true;
         // controls.autoRotateSpeed = 0.5;
-        controls.update();
+        // controls.update();
 
         // permanent objects
         ground = new Three.Mesh(
@@ -147,18 +148,6 @@ export class App {
     startAnimating(fps: number) {
         const animator = new Animator(() => renderer.render(scene, camera));
         animator.start(fps);
-    };
-
-    _initGui() {
-        const gui = new dat.GUI();
-
-        // todo: append to end?
-        gui.add(params, 'enableFog').onChange(this._updateScene);
-        gui.add(params, 'enableShadows').onChange(this._updateScene);
-        gui.add(this, 'saveStl');
-
-        gui.open();
-        return gui;
     };
 
     _link: HTMLAnchorElement;
