@@ -1,12 +1,21 @@
 import * as dat from 'dat.gui'
 import * as Three from 'three';
+import * as log from 'loglevel';
 
 import { OrbitControls, STLExporter } from './three';
 
 
 export interface AppPlugin {
     createGui(gui: dat.GUI, refreshWith: Function): void;
-    update(): Three.Mesh;
+    update(): Three.Group;
+}
+
+interface Geometric extends Three.Object3D {
+    geometry: Three.Geometry | Three.BufferGeometry;
+}
+
+export function isGeometric(obj: Three.Object3D): obj is Geometric {
+    return (<Geometric>obj).geometry !== undefined;
 }
 
 // todo: move into class
@@ -30,14 +39,15 @@ export class App {
     plugin: AppPlugin;
     exporter: any;  // couldn't get STLExporter type working
     gui: dat.GUI;
-    mesh: Three.Mesh;
+    group: Three.Group;
 
     constructor(plugin: AppPlugin) {
+        log.debug(`App created with plugin ${plugin.constructor.name}`);
         this.plugin = plugin;
 
         this.exporter = new STLExporter();
         this.gui = null;
-        this.mesh = null;
+        this.group = null;
 
         this._initDownload();
         this._initScene();
@@ -61,23 +71,28 @@ export class App {
 
 
     refreshMesh(genNewMesh: Function) {
-        this._destroyMesh();
-        this._setMesh(genNewMesh());
+        console.group(`common.refreshMesh`);
+        this._destroyGroup();
+        this._setGroup(genNewMesh());
+        console.groupEnd();
     };
 
-    _destroyMesh() {
-        if (this.mesh) {
-            scene.remove(this.mesh);
-            this.mesh.geometry.dispose();
-            this.mesh = null;
+    _destroyGroup() {
+        log.debug(`common._destroyMesh [${this.group}]`);
+        if (this.group) {
+            scene.remove(this.group);
+            for (let child of this.group.children) {
+                if (isGeometric(child)) child.geometry.dispose();
+            }
+            this.group = null;
         }
     };
 
-    _setMesh(mesh: Three.Mesh) {
-        this._destroyMesh();
+    _setGroup(mesh: Three.Group) {
+        log.debug(`common._setMesh [${mesh}]`);
         if (mesh) {
             scene.add(mesh);
-            this.mesh = mesh;
+            this.group = mesh;
             camera.lookAt(mesh.position);
             controls.target = mesh.position;
             controls.update();
@@ -86,9 +101,10 @@ export class App {
 
 
     _initScene() {
+        log.debug('common._initScene');
         // camera
         camera = new Three.PerspectiveCamera(50, window.innerWidth / window.innerHeight, 0.01, 10000);
-        camera.position.set(0, CAM_HEIGHT, CAM_HEIGHT);
+        camera.position.set(0, CAM_HEIGHT * 1.4, CAM_HEIGHT * 1.4);
 
         // scene
         scene = new Three.Scene();
@@ -137,11 +153,11 @@ export class App {
         renderer.shadowMap.enabled = params.enableShadows;
         ground.receiveShadow = params.enableShadows;
         lights.forEach(light => light.castShadow = params.enableShadows);
-        this.mesh && (this.mesh.castShadow = params.enableShadows);
+        this.group && (this.group.castShadow = params.enableShadows);
     };
 
     saveStl() {
-        const result = this.exporter.parse(this.mesh);
+        const result = this.exporter.parse(this.group);
         this._saveString(result, 'box.stl');
     };
 

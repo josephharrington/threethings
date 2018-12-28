@@ -1,6 +1,7 @@
 import {
     CurvePath,
     DoubleSide,
+    Group,
     LineBasicMaterial,
     LineCurve3,
     LineSegments,
@@ -65,7 +66,7 @@ export class Spiro implements AppPlugin {
         gui.add(this, 'showWireframe').onChange(resetModel);
     }
 
-    update(): Mesh {
+    update(): Group {
         // const { bigR, lilR, resolution } = params;
         const { bigR, spinNumer, spinDenom, resolution } = this;
         const lilR = (spinNumer / spinDenom) * bigR;
@@ -79,7 +80,7 @@ export class Spiro implements AppPlugin {
         return this.updateModel();
     }
 
-    updateModel(): Mesh {
+    updateModel(): Group {
         // const { bigR, lilR, lilP } = this.guiParams;
         const { bigR, loopRatio, spinNumer, spinDenom } = this;
         const spinRatio = spinNumer / spinDenom;
@@ -109,23 +110,27 @@ export class Spiro implements AppPlugin {
 
         const tubeGeometry = new TubeBufferGeometry(
             path, this.extrusionSegments, this.radius, this.radiusSegments, this.closed);
+
+        const group = new Group();
+        group.position.set(0, this.heightOffGround, 0);
+
         const mesh = new Mesh(tubeGeometry, meshMaterial);
-        mesh.position.set(0, this.heightOffGround, 0);
+        group.add(mesh);
+
         if (this.showWireframe) {
             const wireframe = new LineSegments(tubeGeometry, lineMaterial);
-            mesh.add(wireframe);
+            group.add(wireframe);
         }
 
-        // points
         if (this.showPts) {
             for (let i = 0; i < points.length; i++) {
                 const sphere = new SphereGeometry(this.radius * 1.2, 8, 8);
                 sphere.translate(points[i].x, points[i].y, points[i].z);
                 const sphereMesh = new Mesh(sphere, dotMaterial);
-                mesh.add(sphereMesh);
+                group.add(sphereMesh);
             }
         }
 
-        return mesh;
+        return group;
     }
 }
