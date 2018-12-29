@@ -36,31 +36,25 @@ const CAM_HEIGHT = 300;
 
 export class App {
 
-    plugin: AppPlugin;
-    exporter: any;  // couldn't get STLExporter type working
-    gui: dat.GUI;
-    group: Three.Group;
+    exporter: any = new STLExporter();  // couldn't get STLExporter type working
+    gui: dat.GUI = null;
+    group: Three.Group = null;
 
-    constructor(plugin: AppPlugin) {
+    constructor(public plugin: AppPlugin) {
         log.debug(`App created with plugin ${plugin.constructor.name}`);
-        this.plugin = plugin;
-
-        this.exporter = new STLExporter();
-        this.gui = null;
-        this.group = null;
 
         this._initDownload();
         this._initScene();
 
         this.initGui(plugin);
-        this.refreshMesh(() => plugin.update());
+        this.refreshGroup(() => plugin.update());
     }
 
     initGui(plugin: AppPlugin) {
         this.gui = new dat.GUI();
 
         plugin.createGui(this.gui,
-            (genMesh: any) => () => this.refreshMesh(genMesh));  // todo: something better
+            (getNewGroup: any) => () => this.refreshGroup(getNewGroup));  // todo: something better
 
         const sceneGui = this.gui.addFolder('Scene');
         sceneGui.add(params, 'enableFog').onChange(this._updateScene);
@@ -70,10 +64,10 @@ export class App {
     };
 
 
-    refreshMesh(genNewMesh: Function) {
+    refreshGroup(getNewGroup: Function) {
         console.group(`common.refreshMesh`);
         this._destroyGroup();
-        this._setGroup(genNewMesh());
+        this._setGroup(getNewGroup());
         console.groupEnd();
     };
 
@@ -88,13 +82,13 @@ export class App {
         }
     };
 
-    _setGroup(mesh: Three.Group) {
-        log.debug(`common._setMesh [${mesh}]`);
-        if (mesh) {
-            scene.add(mesh);
-            this.group = mesh;
-            camera.lookAt(mesh.position);
-            controls.target = mesh.position;
+    _setGroup(group: Three.Group) {
+        log.debug(`common._setMesh [${group}]`);
+        if (group) {
+            scene.add(group);
+            this.group = group;
+            camera.lookAt(group.position);
+            controls.target = group.position;
             controls.update();
         }
     };
@@ -188,16 +182,13 @@ export class App {
 }
 
 class Animator {
-    renderFn: Function;
     fpsInterval: number;
     startTime: number;
     now: number;
     then: number;
     elapsed: number;
 
-    constructor(renderFn: Function) {
-        this.renderFn = renderFn;
-    }
+    constructor(private renderFn: Function) { }
 
     start(fps: number) {
         this.fpsInterval = 1000 / fps;
