@@ -6,7 +6,7 @@ import {
     LineCurve3,
     LineSegments, Material,
     Mesh,
-    MeshPhongMaterial,
+    MeshPhongMaterial, TubeBufferGeometry,
     TubeGeometry,
     Vector3
 } from "three";
@@ -15,43 +15,62 @@ import * as log from 'loglevel';
 
 import { AppPlugin, isGeometric } from './common';
 
-class Tree {
+class Branch {
     points: Array<Vector3> = [];
     path: CurvePath<Vector3> = new CurvePath();
 
-    private readonly dSegments = 2;
+    readonly dSegments = 2;
     segments = this.dSegments;
 
-    private t = 0;
-    private vx = 0;
-    private vz = 0;
-    private dt = 5;
-    private maxV = 0.4 * this.dt;  // todo: specify as angle
-    private k = 1;
+    t = 0;
+    vx = 0;
+    vz = 0;
+    dt = 5;
+    maxV = 0.3 * this.dt;  // todo: specify as angle
+    maxA = 45;
+    k = 1;
 
     constructor(
-        public height: number = 300,
+        public h: number = 300,
     ) {
-        this.t = -height / 2;
+        this.t = -h/2;
+    }
+}
+
+class Tree {
+    trunk: Branch;
+    branches: Branch[];
+
+    constructor() {
+        // create trunk
+        this.trunk = new Branch();
+        this.branches = [this.trunk, new Branch(), new Branch(), new Branch(), new Branch(),
+            new Branch(), new Branch(), new Branch(), new Branch(), new Branch(), new Branch(), new Branch(),
+            new Branch(), new Branch(), new Branch(), new Branch(), new Branch(), new Branch(), new Branch(),
+            new Branch(), new Branch(), new Branch(), new Branch(), new Branch(), new Branch(), new Branch(),
+        ];
     }
 
     grow(): boolean {
-        if (this.t >= this.height/2) {
-            return false;
+        for (let branch of this.branches) {
+            if (branch.t >= branch.h/2) {
+                return false;
+            }
+            const lastPt = branch.points[branch.points.length - 1] || new Vector3(0, branch.t, 0);
+            branch.points.push(new Vector3(
+                lastPt.x + branch.vx,
+                branch.t,
+                lastPt.z + branch.vz)
+            );
+            if (branch.points.length >= 2) {
+                branch.path.add(new LineCurve3(branch.points[branch.points.length-2], branch.points[branch.points.length-1]));
+            }
+            branch.vx = Math.min(Math.max(branch.vx + 2*branch.k*Math.random()-branch.k, -branch.maxV), branch.maxV);
+            branch.vz = Math.min(Math.max(branch.vz + 2*branch.k*Math.random()-branch.k, -branch.maxV), branch.maxV);  // todo: move v calcs before point add?
+            branch.t += branch.dt;
+            branch.segments += branch.dSegments;
         }
-        const lastPt = this.points[this.points.length - 1] || new Vector3(0, this.t, 0);
-        this.points.push(new Vector3(
-            lastPt.x + this.vx,
-            this.t,
-            lastPt.z + this.vz)
-        );
-        if (this.points.length >= 2) {
-            this.path.add(new LineCurve3(this.points[this.points.length-2], this.points[this.points.length-1]));
-        }
-        this.vx = Math.min(Math.max(this.vx + 2*this.k*Math.random()-this.k, -this.maxV), this.maxV);
-        this.vz = Math.min(Math.max(this.vz + 2*this.k*Math.random()-this.k, -this.maxV), this.maxV);  // todo: move v calcs before point add?
-        this.t += this.dt;
-        this.segments += this.dSegments;
+
         return true;
     }
 }
@@ -113,12 +132,32 @@ export class Growth implements AppPlugin {
                 this.intId = 0;
                 return;
             }
-            const geom = this.getTreeGeom();
             for (let child of this.group.children) {
                 if (isGeometric(child)) {
                     child.geometry.dispose();  // needed since changes happen outside of common.ts
-                    child.geometry = geom;
                 }
+            }
+            let i = 0;
+            for (let geom of this.getTreeGeoms()) {
+                if (i < this.group.children.length) {
+                    const child = this.group.children[i];
+                    if (isGeometric(child)) {
+                        child.geometry = geom;
+                    }
+                    const nextChild = this.group.children[i+1];
+                    if (this.showWireframe && isGeometric(nextChild)) {
+                        nextChild.geometry = geom;
+                    }
+                } else {
+                    const mesh = new Mesh(geom, this.meshMaterial);
+                    this.group.add(mesh);
+
+                    if (this.showWireframe) {
+                        const wireframe = new LineSegments(geom, this.lineMaterial);
+                        this.group.add(wireframe);
+                    }
+                }
+                i += this.showWireframe ? 2 : 1;
             }
         }, 50);
     }
@@ -130,22 +169,25 @@ export class Growth implements AppPlugin {
         if (!this.tree) {
             this.regrow();
         }
-        const geom = this.getTreeGeom();
+        for (let geom of this.getTreeGeoms()) {
+            const mesh = new Mesh(geom, this.meshMaterial);
+            this.group.add(mesh);
 
-        this.group.add(new Mesh(geom, this.meshMaterial));
-        this.group.position.set(0, this.heightOffGround, 0);
-
-        if (this.showWireframe) {
-            const wireframe = new LineSegments(geom, this.lineMaterial);
-            this.group.add(wireframe);
+            if (this.showWireframe) {
+                const wireframe = new LineSegments(geom, this.lineMaterial);
+                this.group.add(wireframe);
+            }
         }
 
+        this.group.position.set(0, this.heightOffGround, 0);
         return this.group;
     }
 
-    getTreeGeom() {
-        return new TubeGeometry(
-            this.tree.path, this.extrusionSegments + this.tree.segments, this.radius,
-            this.radiusSegments, this.closed);
+    *getTreeGeoms() {
+        for (let branch of this.tree.branches) {
+            yield new TubeBufferGeometry(
+                branch.path, this.extrusionSegments + branch.segments, this.radius,
+                this.radiusSegments, this.closed);
+        }
     }
 }
