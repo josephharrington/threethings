@@ -98,7 +98,7 @@ export class App {
         log.debug('common._initScene');
         // camera
         camera = new Three.PerspectiveCamera(50, window.innerWidth / window.innerHeight, 0.01, 10000);
-        camera.position.set(0, CAM_HEIGHT * 1.4, CAM_HEIGHT * 1.4);
+        camera.position.set(0, CAM_HEIGHT * 1.4, CAM_HEIGHT * 1.7);
 
         // scene
         scene = new Three.Scene();
