@@ -27,8 +27,7 @@ function pin(value: number, min: number, max: number) {
 class Branch {
     points: Array<Vector3> = [];
     path: CurvePath<Vector3> = new CurvePath();
-    height: number;
-    radius: number;
+    level: number;
 
     readonly dSegments = 2;
     segments = this.dSegments;
@@ -41,21 +40,17 @@ class Branch {
     // maxA = 45;
     k = 1;
 
-    constructor(parent: Branch);
-    constructor(parent: null, height: number, radius: number);
-    constructor(public parent: Branch, height?: number, radius?: number) {
+    constructor(public parent: Branch) {
         if (this.parent) {
             this.addPt(parent.points[parent.points.length-2]);
             this.addPt(parent.points[parent.points.length-1]);
-            this.height = this.parent.height;
-            this.radius = this.parent.radius;
+            this.level = this.parent.level + 1;
             this.vx = parent.vx;
             this.vz = parent.vz;
         } else {
             this.addPt(new Vector3(0, -1, 0));
             this.addPt(new Vector3(0, 0, 0));
-            this.height = height;
-            this.radius = radius;
+            this.level = 0;
         }
     }
 
@@ -80,10 +75,8 @@ class Tree {
     branches: Branch[];
     height = 400;
 
-    constructor(
-        public radius: number
-    ) {
-        this.trunk = new Branch(null, this.height, this.radius);
+    constructor() {
+        this.trunk = new Branch(null);
         this.branches = [this.trunk];
     }
 
@@ -92,7 +85,7 @@ class Tree {
         const spawnedBranches = [];
 
         for (let branch of this.branches) {
-            if (branch.y >= branch.height) {
+            if (branch.y >= this.height * Math.pow(0.9, branch.level)) {
                 continue;
             } else {
                 stillGrowing = true;
@@ -136,13 +129,14 @@ export class Growth implements AppPlugin {
     extrusionSegments = 1;
     radiusSegments = 16;
     radius = 10;
-    closed = false;
+    branchChildRadius = 0.7;
 
     group: Group = null;
     tree: Tree = null;
 
     lineMaterial: Material;
     meshMaterial: Material;
+
 
     constructor() {
         this.lineMaterial = new LineBasicMaterial({
@@ -158,11 +152,13 @@ export class Growth implements AppPlugin {
         gui.add(this, 'extrusionSegments', 5, 1000).step(5).onChange(reset);
         gui.add(this, 'radiusSegments', 1, 32).step(1).onChange(reset);
         gui.add(this, 'radius', 1, 100).step(1).onChange(reset);
-        // gui.add(this, 'closed').onChange(reset);
-
-        gui.add(this, 'replant');
-
+        gui.add(this, 'branchChildRadius', 0, 1).onChange(reset);
         gui.add(this, 'showWireframe').onChange(reset);
+
+        const growthFolder = gui.addFolder('growth params');
+        growthFolder.open();
+
+        growthFolder.add(this, 'replant');
     }
 
     replant() {
@@ -170,7 +166,7 @@ export class Growth implements AppPlugin {
 
         this.group.remove(...this.group.children);
 
-        this.tree = new Tree(this.radius);
+        this.tree = new Tree();
         this.tree.grow();
         this.tree.grow();
 
@@ -247,8 +243,8 @@ export class Growth implements AppPlugin {
         for (let branch of this.tree.branches) {
             yield new TubeBufferGeometry(
                 branch.path, this.extrusionSegments + branch.segments,
-                this.radius / this.tree.radius * branch.radius,  // use radius slider as scale basis
-                this.radiusSegments, this.closed);
+                this.radius * Math.pow(this.branchChildRadius, branch.level),
+                this.radiusSegments);
         }
     }
 }
