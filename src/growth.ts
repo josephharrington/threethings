@@ -1,12 +1,13 @@
 import {
-    CurvePath,
-    DoubleSide,
+    CatmullRomCurve3, CircleGeometry,
+    CurvePath, CylinderGeometry,
+    DoubleSide, ExtrudeBufferGeometry,
     Group,
     LineBasicMaterial,
     LineCurve3,
     LineSegments, Material,
     Mesh,
-    MeshPhongMaterial, TubeBufferGeometry,
+    MeshPhongMaterial, Shape, SphereBufferGeometry, TubeBufferGeometry,
     TubeGeometry,
     Vector3
 } from "three";
@@ -16,11 +17,17 @@ import * as log from 'loglevel';
 import { AppPlugin, isGeometric } from './common';
 
 
+const TREE_HEIGHT = 400;
 const MAX_BRANCHES = 100;
+const GROWTH_INTERVAL = 30;
 
 
 function pin(value: number, min: number, max: number) {
     return Math.min(Math.max(value, min), max);
+}
+
+function random(min: number, max: number): number {
+    return (Math.random() * (max - min)) + min;
 }
 
 
@@ -35,7 +42,7 @@ class Branch {
     p = 0; // 0-1 probability of branching
     vx = 0;
     vz = 0;
-    dy = 5;
+    dy = 10;
     maxV = 0.3 * this.dy;  // todo: specify as angle
     // maxA = 45;
     k = 1;
@@ -45,8 +52,13 @@ class Branch {
             this.addPt(parent.points[parent.points.length-2]);
             this.addPt(parent.points[parent.points.length-1]);
             this.level = this.parent.level + 1;
-            this.vx = parent.vx;
+            // this.vx = parent.vx;
+            // this.vz = parent.vz;
+            this.vx = parent.vx + random(-this.k, this.k);
+            this.vz = parent.vx + random(-this.k, this.k);
             this.vz = parent.vz;
+            // this.vx = random(-this.maxV, this.maxV);
+            // this.vz = random(-this.maxV, this.maxV);
         } else {
             this.addPt(new Vector3(0, -1, 0));
             this.addPt(new Vector3(0, 0, 0));
@@ -85,27 +97,27 @@ class Tree {
         const spawnedBranches = [];
 
         for (let branch of this.branches) {
-            if (branch.y >= this.height * Math.pow(0.9, branch.level)) {
+            if (branch.y >= TREE_HEIGHT * Math.pow(0.9, branch.level)) {
                 continue;
             } else {
                 stillGrowing = true;
             }
 
-            branch.vx = pin(branch.vx + 2*branch.k*Math.random()-branch.k, -branch.maxV, branch.maxV);
-            branch.vz = pin(branch.vz + 2*branch.k*Math.random()-branch.k, -branch.maxV, branch.maxV);
+            branch.vx = pin(branch.vx + random(-branch.k, branch.k), -branch.maxV, branch.maxV);
+            branch.vz = pin(branch.vz + random(-branch.k, branch.k), -branch.maxV, branch.maxV);
             branch.addPt(new Vector3(
                 branch.x + branch.vx,
                 branch.y + branch.dy,
                 branch.z + branch.vz));
             branch.segments += branch.dSegments;
 
-            branch.p += 0.01;
+            branch.p += Math.pow(0.8, branch.dy);
             const numBranchesToSpawn = this.numBranchesToSpawn(branch);
             if (numBranchesToSpawn > 0 && this.branches.length < MAX_BRANCHES) {
                 for (let i = 0; i < numBranchesToSpawn; i++) {
                     const newBranch = new Branch(branch);
                     spawnedBranches.push(newBranch);
-                    branch.p -= 0.5;
+                    branch.p -= 3;
                 }
             }
         }
@@ -126,6 +138,7 @@ export class Growth implements AppPlugin {
     heightOffGround = 300;
     intId: number = 0;
 
+    useSplines = true;
     extrusionSegments = 1;
     radiusSegments = 16;
     radius = 10;
@@ -149,6 +162,7 @@ export class Growth implements AppPlugin {
         log.debug('growth.createGui');
         const reset = refreshWith(() => this.update());
 
+        gui.add(this, 'useSplines').onChange(reset);
         gui.add(this, 'extrusionSegments', 5, 1000).step(5).onChange(reset);
         gui.add(this, 'radiusSegments', 1, 32).step(1).onChange(reset);
         gui.add(this, 'radius', 1, 100).step(1).onChange(reset);
@@ -177,8 +191,35 @@ export class Growth implements AppPlugin {
             log.debug('growing');
             const shouldContinue = this.tree.grow();
             if (!shouldContinue) {
+                log.debug('done growing');
                 clearInterval(this.intId);
                 this.intId = 0;
+
+                for (let branch of this.tree.branches) {
+                    // const cap = new Mesh(
+                    //     new SphereBufferGeometry(this.branchRadius(branch), this.radiusSegments, this.radiusSegments),
+                    //     this.meshMaterial);
+                    const cap = new Mesh(
+                        new CylinderGeometry(
+                            this.branchRadius(branch),
+                            0,
+                            10,
+                            this.radiusSegments,
+                            this.radiusSegments),
+                        this.meshMaterial);
+                    cap.position.set(branch.x, branch.y, branch.z);
+                    console.log(branch.points.length);
+                    cap.lookAt(branch.points[branch.points.length-2]);
+                    cap.rotateOnAxis(new Vector3(1,0,0), Math.PI/2);
+
+                    cap.translateOnAxis(
+                        new Vector3(0,-1,0),
+                        5
+                    );
+                    this.group.add(cap)
+
+                    
+                }
                 return;
             }
             for (let child of this.group.children) {
@@ -187,6 +228,7 @@ export class Growth implements AppPlugin {
                 }
             }
             let i = 0;
+            // todo: this loop is jank
             for (let geom of this.getTreeGeoms()) {
                 if (i < this.group.children.length) {
                     const child = this.group.children[i];
@@ -212,7 +254,7 @@ export class Growth implements AppPlugin {
                 }
                 i += this.showWireframe ? 2 : 1;
             }
-        }, 30);
+        }, GROWTH_INTERVAL);
     }
 
     update(): Group {
@@ -239,12 +281,37 @@ export class Growth implements AppPlugin {
         return this.group;
     }
 
+    branchRadius(branch: Branch): number {
+        return this.radius * Math.pow(this.branchChildRadius, branch.level);
+    }
+
     *getTreeGeoms() {
         for (let branch of this.tree.branches) {
+            const spline = this.useSplines ? new CatmullRomCurve3(branch.points) : branch.path;
             yield new TubeBufferGeometry(
-                branch.path, this.extrusionSegments + branch.segments,
-                this.radius * Math.pow(this.branchChildRadius, branch.level),
+                spline,
+                this.extrusionSegments + branch.segments,
+                this.branchRadius(branch),
                 this.radiusSegments);
+
+            // const circleRadius = this.radius * Math.pow(this.branchChildRadius, branch.level);
+            // const circleShape = new Shape();
+            // circleShape.moveTo( 0, circleRadius );
+            // circleShape.quadraticCurveTo( circleRadius, circleRadius, circleRadius, 0 );
+            // circleShape.quadraticCurveTo( circleRadius, - circleRadius, 0, - circleRadius );
+            // circleShape.quadraticCurveTo( - circleRadius, - circleRadius, - circleRadius, 0 );
+            // circleShape.quadraticCurveTo( - circleRadius, circleRadius, 0, circleRadius );
+            //
+            // let extrudeSettings = {
+            //     steps: this.extrusionSegments + branch.segments,
+            //     // depth: 16,
+            //     bevelEnabled: false,
+            //     bevelThickness: 0,
+            //     bevelSize: 0,
+            //     bevelSegments: 1,
+            //     extrudePath: branch.path,
+            // };
+            // yield new ExtrudeBufferGeometry( circleShape, extrudeSettings );
         }
     }
 }
