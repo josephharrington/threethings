@@ -3,19 +3,20 @@ import * as Three from 'three';
 import * as log from 'loglevel';
 
 import { OrbitControls, STLExporter } from './three';
+import {Object3D} from "three";
 
 
-export interface AppPlugin {
-    createGui(gui: dat.GUI, refreshWith: Function): void;
-    update(): Three.Group;
+export abstract class AppPlugin {
+    createGui(gui: dat.GUI, refreshWith: Function): void { }
+    abstract update(): Three.Group;
 }
 
-interface Geometric extends Three.Object3D {
+export interface Geometric extends Three.Object3D {
     geometry: Three.Geometry | Three.BufferGeometry;
 }
 
 export function isGeometric(obj: Three.Object3D): obj is Geometric {
-    return (<Geometric>obj).geometry !== undefined;
+    return obj != null && (<Geometric>obj).geometry !== undefined;
 }
 
 // todo: move into class
@@ -33,6 +34,19 @@ const params = {
 };
 
 const CAM_HEIGHT = 300;
+
+
+export function dispose(obj: Object3D) {
+    if (obj == null) {
+        return;
+    }
+    for (let child of obj.children) {
+        dispose(child);
+    }
+    if (isGeometric(obj)) {
+        obj.geometry.dispose();
+    }
+}
 
 export class App {
 
@@ -75,9 +89,7 @@ export class App {
         log.debug(`common._destroyMesh [${this.group}]`);
         if (this.group) {
             scene.remove(this.group);
-            for (let child of this.group.children) {
-                if (isGeometric(child)) child.geometry.dispose();
-            }
+            dispose(this.group);
             this.group = null;
         }
     };

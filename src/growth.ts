@@ -1,7 +1,8 @@
 import {
+    BufferGeometry,
     CatmullRomCurve3, CircleGeometry,
     CurvePath, CylinderGeometry,
-    DoubleSide, ExtrudeBufferGeometry,
+    DoubleSide, ExtrudeBufferGeometry, Geometry,
     Group,
     LineBasicMaterial,
     LineCurve3,
@@ -14,7 +15,7 @@ import {
 import * as dat from 'dat.gui';
 import * as log from 'loglevel';
 
-import { AppPlugin, isGeometric } from './common';
+import { AppPlugin, isGeometric, dispose, Geometric } from './common';
 
 
 const TREE_HEIGHT = 400;
@@ -111,7 +112,7 @@ class Tree {
                 branch.z + branch.vz));
             branch.segments += branch.dSegments;
 
-            branch.p += Math.pow(0.8, branch.dy);
+            branch.p += Math.pow(0.9, branch.dy);
             const numBranchesToSpawn = this.numBranchesToSpawn(branch);
             if (numBranchesToSpawn > 0 && this.branches.length < MAX_BRANCHES) {
                 for (let i = 0; i < numBranchesToSpawn; i++) {
@@ -132,7 +133,7 @@ class Tree {
 }
 
 
-export class Growth implements AppPlugin {
+export class Growth extends AppPlugin {
     // gui parameters - defaults
     showWireframe = false;
     heightOffGround = 300;
@@ -141,8 +142,8 @@ export class Growth implements AppPlugin {
     useSplines = true;
     extrusionSegments = 1;
     radiusSegments = 16;
-    radius = 10;
-    branchChildRadius = 0.7;
+    radius = 20;
+    branchChildRadius = 0.8;
 
     group: Group = null;
     tree: Tree = null;
@@ -152,6 +153,7 @@ export class Growth implements AppPlugin {
 
 
     constructor() {
+        super();
         this.lineMaterial = new LineBasicMaterial({
             color: 0xffffff, transparent: true, opacity: 0.5 });
         this.meshMaterial = new MeshPhongMaterial({
@@ -199,62 +201,69 @@ export class Growth implements AppPlugin {
                     // const cap = new Mesh(
                     //     new SphereBufferGeometry(this.branchRadius(branch), this.radiusSegments, this.radiusSegments),
                     //     this.meshMaterial);
+                    const br = this.branchRadius(branch);
                     const cap = new Mesh(
                         new CylinderGeometry(
-                            this.branchRadius(branch),
+                            br,
                             0,
-                            10,
+                            br * 3,
                             this.radiusSegments,
                             this.radiusSegments),
                         this.meshMaterial);
                     cap.position.set(branch.x, branch.y, branch.z);
-                    console.log(branch.points.length);
                     cap.lookAt(branch.points[branch.points.length-2]);
                     cap.rotateOnAxis(new Vector3(1,0,0), Math.PI/2);
 
                     cap.translateOnAxis(
                         new Vector3(0,-1,0),
-                        5
+                        br * 1.5
                     );
                     this.group.add(cap)
 
-                    
+
                 }
                 return;
             }
-            for (let child of this.group.children) {
-                if (isGeometric(child)) {
-                    child.geometry.dispose();  // needed since changes happen outside of common.ts
-                }
-            }
-            let i = 0;
-            // todo: this loop is jank
+
+            let i = -1;
+            // todo: this loop is jank -- decouple geometries and child indices
             for (let geom of this.getTreeGeoms()) {
+                i++;
                 if (i < this.group.children.length) {
                     const child = this.group.children[i];
                     if (isGeometric(child)) {
-                        const oldGeom = child.geometry;
-                        child.geometry = geom;
-                        if (oldGeom) oldGeom.dispose();
-                    }
-                    const nextChild = this.group.children[i+1];
-                    if (this.showWireframe && isGeometric(nextChild)) {
-                        const oldGeom = nextChild.geometry;
-                        nextChild.geometry = geom;
-                        if (oldGeom) oldGeom.dispose();
+                        this.replaceMeshGeom(child, geom);
+                    } else {
+
                     }
                 } else {
-                    const mesh = new Mesh(geom, this.meshMaterial);
-                    this.group.add(mesh);
-
-                    if (this.showWireframe) {
-                        const wireframe = new LineSegments(geom, this.lineMaterial);
-                        this.group.add(wireframe);
-                    }
+                    this.group.add(this.newMesh(geom));
                 }
-                i += this.showWireframe ? 2 : 1;
             }
         }, GROWTH_INTERVAL);
+    }
+
+    newMesh(geom: Geometry | BufferGeometry): Mesh {
+        const mesh = new Mesh(geom, this.meshMaterial);
+
+        const wireframe = new LineSegments(geom, this.lineMaterial);
+        wireframe.name = 'wireframe';
+        wireframe.visible = this.showWireframe;
+        mesh.add(wireframe);
+
+        return mesh;
+    }
+
+    replaceMeshGeom(mesh: Geometric, geom: Geometry | BufferGeometry) {
+        dispose(mesh);
+        mesh.geometry = geom;
+
+        const wireframeMesh = mesh.getObjectByName('wireframe');
+        if (!isGeometric(wireframeMesh)) {
+            throw new Error(`Nongeometric wireframe: ${wireframeMesh}`);
+        }
+        wireframeMesh.geometry = geom;
+        wireframeMesh.visible = this.showWireframe;
     }
 
     update(): Group {
@@ -264,14 +273,8 @@ export class Growth implements AppPlugin {
         if (!this.tree) {
             this.replant();
         }
-        for (let geom of this.getTreeGeoms()) {  // todo: share logic with similar in replant()
-            const mesh = new Mesh(geom, this.meshMaterial);
-            this.group.add(mesh);
-
-            if (this.showWireframe) {
-                const wireframe = new LineSegments(geom, this.lineMaterial);
-                this.group.add(wireframe);
-            }
+        for (let geom of this.getTreeGeoms()) {
+            this.group.add(this.newMesh(geom));
         }
 
         // position should be centererd in draw area

@@ -18,7 +18,7 @@ import { AppPlugin } from './common';
 import * as math from './math';
 
 
-export class Spiro implements AppPlugin {
+export class Spiro extends AppPlugin {
     // gui parameters - defaults
     resolution = 20;
     bigR = 252;
