@@ -100,7 +100,7 @@ export class App {
             scene.add(group);
             this.group = group;
             camera.lookAt(group.position);
-            controls.target = group.position;
+            controls.target = group.position.clone();
             controls.update();
         }
     };
@@ -110,7 +110,12 @@ export class App {
         log.debug('common._initScene');
         // camera
         camera = new Three.PerspectiveCamera(50, window.innerWidth / window.innerHeight, 0.01, 10000);
-        camera.position.set(0, CAM_HEIGHT * 1.4, CAM_HEIGHT * 1.7);
+        if (localStorage.getItem('camPos') !== null) {
+            const camPos = JSON.parse(localStorage.getItem('camPos'));
+            camera.position.set(camPos.x, camPos.y, camPos.z);
+        } else {
+            camera.position.set(0, CAM_HEIGHT * 1.4, CAM_HEIGHT * 1.7);
+        }
 
         // scene
         scene = new Three.Scene();
@@ -137,9 +142,9 @@ export class App {
 
         // controls
         controls = new OrbitControls(camera, renderer.domElement);
-        // controls.autoRotate = true;
-        // controls.autoRotateSpeed = 0.5;
-        // controls.update();
+        controls.addEventListener('change', () => {
+            localStorage.setItem('camPos', JSON.stringify(camera.position));
+        });
 
         // permanent objects
         ground = new Three.Mesh(
