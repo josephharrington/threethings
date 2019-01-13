@@ -1,18 +1,16 @@
 import * as three from "three";
 import * as dat from 'dat.gui';
-import * as log from 'loglevel';
 
-import { AppPlugin, isGeometric, dispose, Geometric } from './common';
-import {Vector2} from "three";
+import { AppPlugin } from './common';
 
 
-function thing(target: Simple, propertyKey: string, descriptor: PropertyDescriptor) {
+function thing(target: Sandbox, propertyKey: string, descriptor: PropertyDescriptor) {
     target.things = target.things || {};
     target.things[propertyKey] = descriptor.value;
 }
 
 
-export class Simple extends AppPlugin {
+export class Sandbox extends AppPlugin {
 
     pointMaterial: three.Material;
     lineMaterial: three.Material;
@@ -21,17 +19,6 @@ export class Simple extends AppPlugin {
 
     showNormals = false;
     selectedThing = this.vine.name;
-    // things: {[k:string]: () => three.Object3D} = [
-    //     this.customBufferGeom,
-    //     this.tubeGeom,
-    //     this.closedTubeGeom,
-    //     this.skelly,
-    //     this.vine,
-    // ].reduce((obj: {[k:string]: () => three.Object3D}, item) => {
-    //     obj[item.name] = item.bind(this);
-    //     return obj;
-    // }, {});
-
     things: {[k:string]: () => three.Object3D};
 
     constructor() {
@@ -43,17 +30,6 @@ export class Simple extends AppPlugin {
             side: three.DoubleSide,
             flatShading: true });
         this.pointMaterial = new three.PointsMaterial({size: 8, vertexColors: three.VertexColors});
-
-        // [
-        //     this.customBufferGeom,
-        //     this.tubeGeom,
-        //     this.closedTubeGeom,
-        //     this.skelly,
-        //     this.vine,
-        // ].reduce((obj, item) => {
-        //     obj[item.name] = item.bind(this);
-        //     return obj;
-        // }, this.things);
     }
 
     createGui(gui: dat.GUI, refreshWith: Function): void {
