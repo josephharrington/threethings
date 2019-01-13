@@ -6,12 +6,33 @@ import { AppPlugin, isGeometric, dispose, Geometric } from './common';
 import {Vector2} from "three";
 
 
+function thing(target: Simple, propertyKey: string, descriptor: PropertyDescriptor) {
+    target.things = target.things || {};
+    target.things[propertyKey] = descriptor.value;
+}
+
+
 export class Simple extends AppPlugin {
 
     pointMaterial: three.Material;
     lineMaterial: three.Material;
     meshMaterial: three.Material;
     group: three.Group;
+
+    showNormals = false;
+    selectedThing = this.vine.name;
+    // things: {[k:string]: () => three.Object3D} = [
+    //     this.customBufferGeom,
+    //     this.tubeGeom,
+    //     this.closedTubeGeom,
+    //     this.skelly,
+    //     this.vine,
+    // ].reduce((obj: {[k:string]: () => three.Object3D}, item) => {
+    //     obj[item.name] = item.bind(this);
+    //     return obj;
+    // }, {});
+
+    things: {[k:string]: () => three.Object3D};
 
     constructor() {
         super();
@@ -22,6 +43,23 @@ export class Simple extends AppPlugin {
             side: three.DoubleSide,
             flatShading: true });
         this.pointMaterial = new three.PointsMaterial({size: 8, vertexColors: three.VertexColors});
+
+        // [
+        //     this.customBufferGeom,
+        //     this.tubeGeom,
+        //     this.closedTubeGeom,
+        //     this.skelly,
+        //     this.vine,
+        // ].reduce((obj, item) => {
+        //     obj[item.name] = item.bind(this);
+        //     return obj;
+        // }, this.things);
+    }
+
+    createGui(gui: dat.GUI, refreshWith: Function): void {
+        const resetAll = refreshWith(() => this.update());
+        gui.add(this, 'selectedThing', Object.keys(this.things)).onChange(resetAll);
+        gui.add(this, 'showNormals').onChange(resetAll);
     }
 
     update(): three.Group {
@@ -29,18 +67,17 @@ export class Simple extends AppPlugin {
         this.group = new three.Group();
         this.group.position.set(0, 300, 0);
 
-        // const mesh = this.customBufferGeom();
-        // const mesh = this.tubeGeom();
-        // const mesh = this.closedTubeGeom();
-        // const mesh = this.skelly();
-        const mesh = this.vine();
+        const mesh = this.things[this.selectedThing].bind(this)();
         this.group.add(mesh);
 
-        // this.group.add(new three.VertexNormalsHelper(mesh, 4));
+        if (this.showNormals) {
+            this.group.add(new three.VertexNormalsHelper(mesh, 4));
+        }
 
         return this.group;
     }
 
+    @thing
     customBufferGeom(): three.Mesh {
         // from https://threejs.org/docs/#api/en/core/BufferGeometry
         const geometry = new three.BufferGeometry();
@@ -62,6 +99,7 @@ export class Simple extends AppPlugin {
         return new three.Mesh( geometry, this.meshMaterial );
     }
 
+    @thing
     tubeGeom(): three.Mesh {
         const path = new CustomSinCurve(50);
         const tubularSegments = 10;
@@ -72,6 +110,7 @@ export class Simple extends AppPlugin {
         return new three.Mesh(geometry, this.meshMaterial);
     }
 
+    @thing
     closedTubeGeom(): three.Mesh {
         const path = new CustomSinCurve(50);
         const tubularSegments = 100;
@@ -115,6 +154,7 @@ export class Simple extends AppPlugin {
         return new three.Mesh(geometry, this.meshMaterial);
     }
 
+    @thing
     skelly(): three.Object3D {
         const group = new three.Group();
 
@@ -171,7 +211,9 @@ export class Simple extends AppPlugin {
         return group;
     }
 
+    @thing
     vine(): three.Object3D {
+        console.log('vine');
         const path = new CustomSinCurve(50);
         const tubularSegments = 128;
         const radius = 4;
@@ -193,39 +235,15 @@ export class Simple extends AppPlugin {
             for (let j = 0; j <= radiusSegments; j++) {
                 const vIdx = 3 * (i * (radiusSegments+1) + j);
                 pt.set(verts[vIdx], verts[vIdx+1], verts[vIdx+2]);
+                // scale points of a tube towards its center
                 newPt.copy(pt.sub(pathPt).multiplyScalar(radiusFn(t)).add(pathPt));
                 verts[vIdx] = newPt.x;
                 verts[vIdx+1] = newPt.y;
                 verts[vIdx+2] = newPt.z;
             }
         }
-        //
-        // const lastVertIdx = verts.length/3 - 1;
-        //
-        // const firstPt = path.getPointAt(0);
-        // const lastPt = path.getPointAt(1);
-        // verts.push(firstPt.x, firstPt.y, firstPt.z);
-        // verts.push(lastPt.x, lastPt.y, lastPt.z);
-        // const firstPtIdx = lastVertIdx + 1;
-        // const lastPtIdx = lastVertIdx + 2;
-        //
-        // const indices = Array.prototype.slice.call(geometry.getIndex().array);
-        //
-        // for (let i = 0; i < radiusSegments; i++) {
-        //     indices.push(i, i+1, firstPtIdx);
-        // }
-        // for (let i = 0; i < radiusSegments; i++) {
-        //     indices.push(lastVertIdx-i, lastVertIdx-i-1, lastPtIdx);
-        // }
-        //
-        // const secondPt = path.getPointAt( 1 / tubularSegments);
-        // const secondToLastPt = path.getPointAt( (tubularSegments-1) / tubularSegments);
-        //
-        // const firstNorm = firstPt.sub(secondPt).normalize();
-        // norms.push(firstNorm.x, firstPt.y, firstPt.z);
-        // const lastNorm = lastPt.sub(secondToLastPt).normalize();
-        // norms.push(lastNorm.x, lastNorm.y, lastNorm.z);
 
+        // todo: reimplement end caps
         geometry.addAttribute( 'position', new three.Float32BufferAttribute( verts, 3 ) );
         // geometry.addAttribute( 'normal', new three.Float32BufferAttribute( norms, 3 ) );
         // geometry.setIndex(indices);
