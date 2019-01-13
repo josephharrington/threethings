@@ -79,14 +79,14 @@ export class App {
 
 
     refreshGroup(getNewGroup: Function) {
-        console.group(`common.refreshMesh`);
+        console.group(`common.refreshGroup`);
         this._destroyGroup();
         this._setGroup(getNewGroup());
         console.groupEnd();
     };
 
     _destroyGroup() {
-        log.debug(`common._destroyMesh [${this.group}]`);
+        log.debug(`common._destroyGroup [${this.group}]`);
         if (this.group) {
             scene.remove(this.group);
             dispose(this.group);
@@ -95,7 +95,7 @@ export class App {
     };
 
     _setGroup(group: Three.Group) {
-        log.debug(`common._setMesh [${group}]`);
+        log.debug(`common._setGroup [${group}]`);
         if (group) {
             scene.add(group);
             this.group = group;

@@ -2,12 +2,7 @@ import * as three from "three";
 import * as dat from 'dat.gui';
 
 import { AppPlugin } from './common';
-
-
-function thing(target: Sandbox, propertyKey: string, descriptor: PropertyDescriptor) {
-    target.things = target.things || {};
-    target.things[propertyKey] = descriptor.value;
-}
+import { thing } from "./util/thing";
 
 
 export class Sandbox extends AppPlugin {
@@ -19,7 +14,6 @@ export class Sandbox extends AppPlugin {
 
     showNormals = false;
     selectedThing = this.vine.name;
-    things: {[k:string]: () => three.Object3D};
 
     constructor() {
         super();
@@ -34,7 +28,7 @@ export class Sandbox extends AppPlugin {
 
     createGui(gui: dat.GUI, refreshWith: Function): void {
         const resetAll = refreshWith(() => this.update());
-        gui.add(this, 'selectedThing', Object.keys(this.things)).onChange(resetAll);
+        gui.add(this, 'selectedThing', Object.keys(thing.things)).onChange(resetAll);
         gui.add(this, 'showNormals').onChange(resetAll);
     }
 
@@ -43,7 +37,7 @@ export class Sandbox extends AppPlugin {
         this.group = new three.Group();
         this.group.position.set(0, 300, 0);
 
-        const mesh = this.things[this.selectedThing].bind(this)();
+        const mesh = thing.things[this.selectedThing].bind(this)();
         this.group.add(mesh);
 
         if (this.showNormals) {
