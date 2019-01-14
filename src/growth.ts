@@ -1,21 +1,21 @@
 import {
     BufferGeometry,
-    CatmullRomCurve3, CircleGeometry,
-    CurvePath, CylinderGeometry,
-    DoubleSide, ExtrudeBufferGeometry, Geometry,
+    CatmullRomCurve3, Curve,
+    CurvePath,
+    DoubleSide, Float32BufferAttribute, Geometry,
     Group,
     LineBasicMaterial,
     LineCurve3,
     LineSegments, Material,
     Mesh,
-    MeshPhongMaterial, Shape, SphereBufferGeometry, TubeBufferGeometry,
-    TubeGeometry,
+    MeshPhongMaterial, TubeBufferGeometry,
     Vector3
 } from "three";
 import * as dat from 'dat.gui';
 import * as log from 'loglevel';
 
 import { AppPlugin, isGeometric, dispose, Geometric } from './common';
+import { easeOutQuart } from "./util/easing";
 
 
 const TREE_HEIGHT = 400;
@@ -83,6 +83,7 @@ class Branch {
     }
 }
 
+
 class Tree {
     trunk: Branch;
     branches: Branch[];
@@ -140,7 +141,7 @@ export class Growth extends AppPlugin {
     intId: number = 0;
 
     useSplines = true;
-    extrusionSegments = 1;
+    extrusionSegments = 4;
     radiusSegments = 16;
     radius = 20;
     branchChildRadius = 0.8;
@@ -165,10 +166,11 @@ export class Growth extends AppPlugin {
         const reset = refreshWith(() => this.update());
 
         gui.add(this, 'useSplines').onChange(reset);
-        gui.add(this, 'extrusionSegments', 5, 1000).step(5).onChange(reset);
+        gui.add(this, 'extrusionSegments', 0, 100).step(1).onChange(reset);
         gui.add(this, 'radiusSegments', 1, 32).step(1).onChange(reset);
         gui.add(this, 'radius', 1, 100).step(1).onChange(reset);
         gui.add(this, 'branchChildRadius', 0, 1).onChange(reset);
+        gui.add(this, 'heightRatio', 0, 3).step(0.1).onChange(reset);
         gui.add(this, 'showWireframe').onChange(reset);
 
         const growthFolder = gui.addFolder('growth params');
@@ -196,32 +198,6 @@ export class Growth extends AppPlugin {
                 log.debug('done growing');
                 clearInterval(this.intId);
                 this.intId = 0;
-
-                for (let branch of this.tree.branches) {
-                    // const cap = new Mesh(
-                    //     new SphereBufferGeometry(this.branchRadius(branch), this.radiusSegments, this.radiusSegments),
-                    //     this.meshMaterial);
-                    const br = this.branchRadius(branch);
-                    const cap = new Mesh(
-                        new CylinderGeometry(
-                            br,
-                            0,
-                            br * 3,
-                            this.radiusSegments,
-                            this.radiusSegments),
-                        this.meshMaterial);
-                    cap.position.set(branch.x, branch.y, branch.z);
-                    cap.lookAt(branch.points[branch.points.length-2]);
-                    cap.rotateOnAxis(new Vector3(1,0,0), Math.PI/2);
-
-                    cap.translateOnAxis(
-                        new Vector3(0,-1,0),
-                        br * 1.5
-                    );
-                    this.group.add(cap)
-
-
-                }
                 return;
             }
 
@@ -291,30 +267,101 @@ export class Growth extends AppPlugin {
     *getTreeGeoms() {
         for (let branch of this.tree.branches) {
             const spline = this.useSplines ? new CatmullRomCurve3(branch.points) : branch.path;
-            yield new TubeBufferGeometry(
+
+            // const radiusFn = (t: number) => 0.5 + 0.5*Math.sin(2 * Math.PI * (t-0.25));
+            // const radiusFn = (t: number) => 0.5 + 0.5 * Math.cos(Math.PI * t);
+            // const radiusFn = (t: number) => Math.min(0.4 + t, 1);
+
+            const radiusFn = (t: number) => {
+                const k = 0.7;
+                if (t <= k) {
+                    return 1;
+                } else {
+                    // return 0.5 + 0.5 * Math.cos(Math.PI * (t-k)/(1-k));
+                    return easeOutQuart((1-t)/(1-k));
+                }
+            };
+
+            yield new TaperedTubeBufferGeometry(
                 spline,
                 this.extrusionSegments + branch.segments,
+                radiusFn,
                 this.branchRadius(branch),
                 this.radiusSegments);
-
-            // const circleRadius = this.radius * Math.pow(this.branchChildRadius, branch.level);
-            // const circleShape = new Shape();
-            // circleShape.moveTo( 0, circleRadius );
-            // circleShape.quadraticCurveTo( circleRadius, circleRadius, circleRadius, 0 );
-            // circleShape.quadraticCurveTo( circleRadius, - circleRadius, 0, - circleRadius );
-            // circleShape.quadraticCurveTo( - circleRadius, - circleRadius, - circleRadius, 0 );
-            // circleShape.quadraticCurveTo( - circleRadius, circleRadius, 0, circleRadius );
-            //
-            // let extrudeSettings = {
-            //     steps: this.extrusionSegments + branch.segments,
-            //     // depth: 16,
-            //     bevelEnabled: false,
-            //     bevelThickness: 0,
-            //     bevelSize: 0,
-            //     bevelSegments: 1,
-            //     extrudePath: branch.path,
-            // };
-            // yield new ExtrudeBufferGeometry( circleShape, extrudeSettings );
         }
+    }
+}
+
+
+class TaperedTubeBufferGeometry extends TubeBufferGeometry {
+    constructor(
+        path: Curve<Vector3>,
+        tubularSegments?: number,
+        radiusFn?: (t: number) => number,
+        baseRadius?: number,
+        radiusSegments?: number,
+        closed?: boolean,
+    ) {
+        super(path, tubularSegments, baseRadius, radiusSegments, closed);
+
+        const verts = Array.prototype.slice.call(this.getAttribute('position').array);
+        const norms = Array.prototype.slice.call(this.getAttribute('normal').array);
+
+        if (radiusFn != null) {
+            this.scaleVerts(verts, radiusFn);
+        }
+        this.closeEnds(verts, norms);
+
+        this.addAttribute('position', new Float32BufferAttribute(verts, 3));
+        this.addAttribute('normal', new Float32BufferAttribute(norms, 3));
+    }
+
+    private scaleVerts(verts: number[], radiusFn: (t: number) => number) {
+        const pt: Vector3 = new Vector3(),
+            newPt: Vector3 = new Vector3(),
+            pathPt: Vector3 = new Vector3();
+        for (let i = 0; i <= this.parameters.tubularSegments; i++) {
+            const t = i / this.parameters.tubularSegments;
+            this.parameters.path.getPointAt(t, pathPt);
+
+            for (let j = 0; j <= this.parameters.radialSegments; j++) {
+                const vIdx = 3 * (i * (this.parameters.radialSegments+1) + j);
+                pt.set(verts[vIdx], verts[vIdx+1], verts[vIdx+2]);
+                // scale points of a tube towards its center
+                newPt.copy(pt.sub(pathPt).multiplyScalar(radiusFn(t)).add(pathPt));  // k(B - A) + A
+                verts[vIdx] = newPt.x;
+                verts[vIdx+1] = newPt.y;
+                verts[vIdx+2] = newPt.z;
+            }
+        }
+    }
+
+    private closeEnds(verts: number[], norms: number[]) {
+        const { path, radialSegments, tubularSegments } = this.parameters;
+        const lastVertIdx = verts.length/3 - 1;
+        const firstPt = path.getPointAt(0);
+        const lastPt = path.getPointAt(1);
+        verts.push(firstPt.x, firstPt.y, firstPt.z);
+        verts.push(lastPt.x, lastPt.y, lastPt.z);
+        const firstPtIdx = lastVertIdx + 1;
+        const lastPtIdx = lastVertIdx + 2;
+
+        const indices = Array.prototype.slice.call(this.getIndex().array);
+
+        for (let i = 0; i < radialSegments; i++) {
+            indices.push(i, i+1, firstPtIdx);
+        }
+        for (let i = 0; i < radialSegments; i++) {
+            indices.push(lastVertIdx-i, lastVertIdx-i-1, lastPtIdx);
+        }
+
+        const secondPt = path.getPointAt( 1 / tubularSegments);
+        const secondToLastPt = path.getPointAt( (tubularSegments-1) / tubularSegments);
+
+        const firstNorm = firstPt.sub(secondPt).normalize();
+        const lastNorm = lastPt.sub(secondToLastPt).normalize();
+        norms.push(firstNorm.x, firstPt.y, firstPt.z);
+        norms.push(lastNorm.x, lastNorm.y, lastNorm.z);
+        this.setIndex(indices);
     }
 }
