@@ -31,6 +31,18 @@ function random(min: number, max: number): number {
     return (Math.random() * (max - min)) + min;
 }
 
+const params = {
+    useSplines: true,
+    extrusionSegments: 4,
+    radiusSegments: 16,
+    radius: 20,
+    branchChildRadius: 0.8,
+    heightRatio: 0.9,
+    showWireframe: false,
+    branchDP: 9999,
+    initialP: 0.2,
+};
+
 
 class Branch {
     points: Array<Vector3> = [];
@@ -40,7 +52,7 @@ class Branch {
     readonly dSegments = 2;
     segments = this.dSegments;
 
-    p = 0; // 0-1 probability of branching
+    p = params.initialP;  // probability of branching
     vx = 0;
     vz = 0;
     dy = 10;
@@ -99,7 +111,7 @@ class Tree {
         const spawnedBranches = [];
 
         for (let branch of this.branches) {
-            if (branch.y >= TREE_HEIGHT * Math.pow(0.9, branch.level)) {
+            if (branch.y >= TREE_HEIGHT * Math.pow(params.heightRatio, branch.level)) {
                 continue;
             } else {
                 stillGrowing = true;
@@ -112,14 +124,13 @@ class Tree {
                 branch.y + branch.dy,
                 branch.z + branch.vz));
             branch.segments += branch.dSegments;
-
-            branch.p += Math.pow(0.9, branch.dy);
+            branch.p = 1 - ((1-branch.p) * Math.pow(params.branchDP/10000, branch.dy));
             const numBranchesToSpawn = this.numBranchesToSpawn(branch);
             if (numBranchesToSpawn > 0 && this.branches.length < MAX_BRANCHES) {
                 for (let i = 0; i < numBranchesToSpawn; i++) {
                     const newBranch = new Branch(branch);
                     spawnedBranches.push(newBranch);
-                    branch.p -= 3;
+                    branch.p = 0;
                 }
             }
         }
@@ -135,23 +146,14 @@ class Tree {
 
 
 export class Growth extends AppPlugin {
-    // gui parameters - defaults
-    showWireframe = false;
     heightOffGround = 300;
     intId: number = 0;
-
-    useSplines = true;
-    extrusionSegments = 4;
-    radiusSegments = 16;
-    radius = 20;
-    branchChildRadius = 0.8;
 
     group: Group = null;
     tree: Tree = null;
 
     lineMaterial: Material;
     meshMaterial: Material;
-
 
     constructor() {
         super();
@@ -165,13 +167,15 @@ export class Growth extends AppPlugin {
         log.debug('growth.createGui');
         const reset = refreshWith(() => this.update());
 
-        gui.add(this, 'useSplines').onChange(reset);
-        gui.add(this, 'extrusionSegments', 0, 100).step(1).onChange(reset);
-        gui.add(this, 'radiusSegments', 1, 32).step(1).onChange(reset);
-        gui.add(this, 'radius', 1, 100).step(1).onChange(reset);
-        gui.add(this, 'branchChildRadius', 0, 1).onChange(reset);
-        gui.add(this, 'heightRatio', 0, 3).step(0.1).onChange(reset);
-        gui.add(this, 'showWireframe').onChange(reset);
+        gui.add(params, 'useSplines').onChange(reset);
+        gui.add(params, 'extrusionSegments', 0, 100).step(1).onChange(reset);
+        gui.add(params, 'radiusSegments', 1, 32).step(1).onChange(reset);
+        gui.add(params, 'radius', 1, 100).step(1).onChange(reset);
+        gui.add(params, 'branchChildRadius', 0, 1).onChange(reset);
+        gui.add(params, 'heightRatio', 0, 1 ).step(0.05).onChange(reset);
+        gui.add(params, 'branchDP', 9400, 10000).step(1).onChange(reset);
+        gui.add(params, 'showWireframe').onChange(reset);
+        gui.add(params, 'initialP', 0, 1).step(0.05).onChange(reset);
 
         const growthFolder = gui.addFolder('growth params');
         growthFolder.open();
@@ -195,7 +199,7 @@ export class Growth extends AppPlugin {
             log.debug('growing');
             const shouldContinue = this.tree.grow();
             if (!shouldContinue) {
-                log.debug('done growing');
+                log.debug(`done growing, num branches: ${this.tree.branches.length}`);
                 clearInterval(this.intId);
                 this.intId = 0;
                 return;
@@ -224,7 +228,7 @@ export class Growth extends AppPlugin {
 
         const wireframe = new LineSegments(geom, this.lineMaterial);
         wireframe.name = 'wireframe';
-        wireframe.visible = this.showWireframe;
+        wireframe.visible = params.showWireframe;
         mesh.add(wireframe);
 
         return mesh;
@@ -239,7 +243,7 @@ export class Growth extends AppPlugin {
             throw new Error(`Nongeometric wireframe: ${wireframeMesh}`);
         }
         wireframeMesh.geometry = geom;
-        wireframeMesh.visible = this.showWireframe;
+        wireframeMesh.visible = params.showWireframe;
     }
 
     update(): Group {
@@ -261,12 +265,12 @@ export class Growth extends AppPlugin {
     }
 
     branchRadius(branch: Branch): number {
-        return this.radius * Math.pow(this.branchChildRadius, branch.level);
+        return params.radius * Math.pow(params.branchChildRadius, branch.level);
     }
 
     *getTreeGeoms() {
         for (let branch of this.tree.branches) {
-            const spline = this.useSplines ? new CatmullRomCurve3(branch.points) : branch.path;
+            const spline = params.useSplines ? new CatmullRomCurve3(branch.points) : branch.path;
 
             // const radiusFn = (t: number) => 0.5 + 0.5*Math.sin(2 * Math.PI * (t-0.25));
             // const radiusFn = (t: number) => 0.5 + 0.5 * Math.cos(Math.PI * t);
@@ -284,10 +288,10 @@ export class Growth extends AppPlugin {
 
             yield new TaperedTubeBufferGeometry(
                 spline,
-                this.extrusionSegments + branch.segments,
+                params.extrusionSegments + branch.segments,
                 radiusFn,
                 this.branchRadius(branch),
-                this.radiusSegments);
+                params.radiusSegments);
         }
     }
 }
