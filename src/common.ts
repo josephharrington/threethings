@@ -4,6 +4,7 @@ import * as log from 'loglevel';
 
 import { OrbitControls, STLExporter } from './three';
 import {Object3D} from "three";
+import {collectEntries} from "./util/collections";
 
 
 export abstract class AppPlugin {
@@ -30,7 +31,8 @@ let scene: Three.Scene,
 
 const params = {
     enableFog: false,
-    enableShadows: false
+    enableShadows: false,
+    selectedPlugin: 'none',
 };
 
 const CAM_HEIGHT = 300;
@@ -53,19 +55,31 @@ export class App {
     exporter: any = new STLExporter();  // couldn't get STLExporter type working
     gui: dat.GUI = null;
     group: Three.Group = null;
+    pluginsMap: {[key: string]: AppPlugin};
 
-    constructor(public plugin: AppPlugin) {
-        log.debug(`App created with plugin ${plugin.constructor.name}`);
-
+    constructor(plugins: AppPlugin[]) {
         this._initDownload();
         this._initScene();
 
-        this.initGui(plugin);
-        this.refreshGroup(() => plugin.update());
+        this.pluginsMap = collectEntries(plugins, plugin => plugin.constructor.name);
+        if (localStorage.getItem('selectedPlugin')) {
+            params.selectedPlugin = localStorage.getItem('selectedPlugin');
+        } else {
+            params.selectedPlugin = Object.keys(this.pluginsMap)[0];
+        }
+        this._setPlugin();
     }
 
+    _setPlugin() {
+        this.initGui(this.pluginsMap[params.selectedPlugin]);
+        this.refreshGroup(() => this.pluginsMap[params.selectedPlugin].update());
+        localStorage.setItem('selectedPlugin', params.selectedPlugin);
+    };
+
     initGui(plugin: AppPlugin) {
+        this.gui && this.gui.destroy();
         this.gui = new dat.GUI();
+        const setPlugin = () => this._setPlugin();
 
         plugin.createGui(this.gui,
             (getNewGroup: any) => () => this.refreshGroup(getNewGroup));  // todo: something better
@@ -73,6 +87,8 @@ export class App {
         const sceneGui = this.gui.addFolder('Scene');
         sceneGui.add(params, 'enableFog').onChange(this._updateScene);
         sceneGui.add(params, 'enableShadows').onChange(this._updateScene);
+        sceneGui.add(params, 'selectedPlugin', Object.keys(this.pluginsMap)).onChange(setPlugin);
+        sceneGui.open();
 
         this.gui.add(this, 'saveStl');
     };

@@ -7,10 +7,11 @@ import { Sandbox } from "./sandbox";
 
 function main() {
     log.setLevel('debug');
-    // const plugin = new Spiro();
-    // const plugin = new Growth();
-    const plugin = new Sandbox();
-    const app = new App(plugin);
+    const app = new App([
+        new Sandbox(),
+        new Spiro(),
+        new Growth(),
+    ]);
     app.startAnimating(20);
 }
 
