@@ -20,7 +20,7 @@ export class Tree {
 
     grow(): boolean {
         let stillGrowing = false;
-        const spawnedBranches = [];
+        let spawnedBranches: Branch[] = [];
 
         for (let branch of this.branches) {
             if (branch.y >= TREE_HEIGHT * Math.pow(Tree.branchShrink, branch.level)) {
@@ -37,22 +37,15 @@ export class Tree {
                 branch.z + branch.vz));
             branch.segments += branch.dSegments;
             branch.p = 1 - ((1-branch.p) * Math.pow(Tree.branchDP/10000, branch.dy));
-            const numBranchesToSpawn = this.numBranchesToSpawn(branch);
-            if (numBranchesToSpawn > 0 && this.branches.length < MAX_BRANCHES) {
-                for (let i = 0; i < numBranchesToSpawn; i++) {
-                    const newBranch = new Branch(branch);
-                    spawnedBranches.push(newBranch);
-                    branch.p = 0;
-                }
+
+            if (this.branches.length < MAX_BRANCHES) {
+                // todo: limit branches added to <= MAX
+                spawnedBranches = spawnedBranches.concat(branch.spawn());
             }
         }
 
         this.branches = this.branches.concat(spawnedBranches);
         return stillGrowing;
-    }
-
-    numBranchesToSpawn(branch: Branch) { // todo: different random instances for each thing
-        return Math.random() < branch.p ? 1 : 0;
     }
 }
 
@@ -109,6 +102,23 @@ export class Branch {
                 this.points[this.points.length-1]
             ))
         }
+    }
+
+    spawn(): Branch[] {
+        const spawnedBranches = [];
+        const numBranchesToSpawn = this.numBranchesToSpawn();
+        if (numBranchesToSpawn > 0) {
+            for (let i = 0; i < numBranchesToSpawn; i++) {
+                const newBranch = new Branch(this);
+                spawnedBranches.push(newBranch);
+                this.p = Branch.initialP;
+            }
+        }
+        return spawnedBranches;
+    }
+
+    private numBranchesToSpawn() { // todo: different random instances for each thing
+        return Math.random() < this.p ? 1 : 0;
     }
 }
 
