@@ -1,11 +1,9 @@
 import {
     BufferGeometry,
     CatmullRomCurve3, Curve,
-    CurvePath,
     DoubleSide, Float32BufferAttribute, Geometry,
     Group,
     LineBasicMaterial,
-    LineCurve3,
     LineSegments, Material,
     Mesh,
     MeshPhongMaterial, TubeBufferGeometry,
@@ -15,21 +13,13 @@ import * as dat from 'dat.gui';
 import * as log from 'loglevel';
 
 import { AppPlugin, isGeometric, dispose, Geometric } from './common';
+import { Branch, Tree } from "./tree";
+
 import { easeOutQuart } from "./util/easing";
 
 
-const TREE_HEIGHT = 400;
-const MAX_BRANCHES = 100;
 const GROWTH_INTERVAL = 30;
 
-
-function pin(value: number, min: number, max: number) {
-    return Math.min(Math.max(value, min), max);
-}
-
-function random(min: number, max: number): number {
-    return (Math.random() * (max - min)) + min;
-}
 
 const params = {
     useSplines: true,
@@ -37,112 +27,8 @@ const params = {
     radiusSegments: 16,
     radius: 20,
     branchChildRadius: 0.8,
-    heightRatio: 0.9,
     showWireframe: false,
-    branchDP: 9999,
-    initialP: 0.2,
 };
-
-
-class Branch {
-    points: Array<Vector3> = [];
-    path: CurvePath<Vector3> = new CurvePath();
-    level: number;
-
-    readonly dSegments = 2;
-    segments = this.dSegments;
-
-    p = params.initialP;  // probability of branching
-    vx = 0;
-    vz = 0;
-    dy = 10;
-    maxV = 0.3 * this.dy;  // todo: specify as angle
-    // maxA = 45;
-    k = 1;
-
-    constructor(public parent: Branch) {
-        if (this.parent) {
-            this.addPt(parent.points[parent.points.length-2]);
-            this.addPt(parent.points[parent.points.length-1]);
-            this.level = this.parent.level + 1;
-            // this.vx = parent.vx;
-            // this.vz = parent.vz;
-            this.vx = parent.vx + random(-this.k, this.k);
-            this.vz = parent.vx + random(-this.k, this.k);
-            this.vz = parent.vz;
-            // this.vx = random(-this.maxV, this.maxV);
-            // this.vz = random(-this.maxV, this.maxV);
-        } else {
-            this.addPt(new Vector3(0, -1, 0));
-            this.addPt(new Vector3(0, 0, 0));
-            this.level = 0;
-        }
-    }
-
-    get lastPt(): Vector3 { return this.points[this.points.length - 1]; }
-    get x() { return this.lastPt.x; }
-    get y() { return this.lastPt.y; }
-    get z() { return this.lastPt.z; }
-
-    addPt(pt: Vector3) {
-        this.points.push(pt);
-        if (this.points.length >= 2) {
-            this.path.add(new LineCurve3(
-                this.points[this.points.length-2],
-                this.points[this.points.length-1]
-            ))
-        }
-    }
-}
-
-
-class Tree {
-    trunk: Branch;
-    branches: Branch[];
-    height = 400;
-
-    constructor() {
-        this.trunk = new Branch(null);
-        this.branches = [this.trunk];
-    }
-
-    grow(): boolean {
-        let stillGrowing = false;
-        const spawnedBranches = [];
-
-        for (let branch of this.branches) {
-            if (branch.y >= TREE_HEIGHT * Math.pow(params.heightRatio, branch.level)) {
-                continue;
-            } else {
-                stillGrowing = true;
-            }
-
-            branch.vx = pin(branch.vx + random(-branch.k, branch.k), -branch.maxV, branch.maxV);
-            branch.vz = pin(branch.vz + random(-branch.k, branch.k), -branch.maxV, branch.maxV);
-            branch.addPt(new Vector3(
-                branch.x + branch.vx,
-                branch.y + branch.dy,
-                branch.z + branch.vz));
-            branch.segments += branch.dSegments;
-            branch.p = 1 - ((1-branch.p) * Math.pow(params.branchDP/10000, branch.dy));
-            const numBranchesToSpawn = this.numBranchesToSpawn(branch);
-            if (numBranchesToSpawn > 0 && this.branches.length < MAX_BRANCHES) {
-                for (let i = 0; i < numBranchesToSpawn; i++) {
-                    const newBranch = new Branch(branch);
-                    spawnedBranches.push(newBranch);
-                    branch.p = 0;
-                }
-            }
-        }
-
-        this.branches = this.branches.concat(spawnedBranches);
-        return stillGrowing;
-    }
-
-    numBranchesToSpawn(branch: Branch) { // todo: different random instances for each thing
-        return Math.random() < branch.p ? 1 : 0;
-    }
-}
 
 
 export class Growth extends AppPlugin {
@@ -172,10 +58,11 @@ export class Growth extends AppPlugin {
         gui.add(params, 'radiusSegments', 1, 32).step(1).onChange(reset);
         gui.add(params, 'radius', 1, 100).step(1).onChange(reset);
         gui.add(params, 'branchChildRadius', 0, 1).onChange(reset);
-        gui.add(params, 'heightRatio', 0, 1 ).step(0.05).onChange(reset);
-        gui.add(params, 'branchDP', 9400, 10000).step(1).onChange(reset);
         gui.add(params, 'showWireframe').onChange(reset);
-        gui.add(params, 'initialP', 0, 1).step(0.05).onChange(reset);
+
+        gui.add(Tree, 'branchDP', 9400, 10000).step(1).onChange(reset);
+        gui.add(Tree, 'branchShrink', 0, 1 ).step(0.05).onChange(reset);
+        gui.add(Branch, 'initialP', 0, 1).step(0.05).onChange(reset);
 
         const growthFolder = gui.addFolder('growth params');
         growthFolder.open();
