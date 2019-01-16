@@ -57,6 +57,13 @@ export class App {
     group: Three.Group = null;
     pluginsMap: {[key: string]: AppPlugin};
 
+    // scene: Three.Scene;
+    // renderer: Three.WebGLRenderer;
+    // camera: Three.Camera;
+    // ground: Three.Mesh;
+    // lights: Array<Three.Light>;
+    // controls: any;  // couldn't get OrbitControls working
+
     constructor(plugins: AppPlugin[]) {
         this._initDownload();
         this._initScene();
@@ -133,6 +140,60 @@ export class App {
             camera.position.set(0, CAM_HEIGHT * 1.4, CAM_HEIGHT * 1.7);
         }
 
+        // renderer
+        renderer = new Three.WebGLRenderer({ antialias: true });
+        renderer.setPixelRatio(window.devicePixelRatio);
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        document.body.appendChild(renderer.domElement);
+
+        // controls
+        controls = new OrbitControls(camera, renderer.domElement);
+        controls.addEventListener('change', () => {
+            localStorage.setItem('camPos', JSON.stringify(camera.position));
+        });
+
+        this._scene();
+        this._updateScene();
+    };
+
+    _scene() {
+        this._scene1();
+        // this._scene2();
+    }
+
+    _updateScene() {
+        this._updateScene1();
+        // this._updateScene2();
+    }
+
+    _scene2() {
+        scene = new Three.Scene();
+        scene.background = new Three.Color( 0xAAAAAA );
+
+        lights = [];
+        let light;
+        light = new Three.HemisphereLight(0x94CB9C, 0x3EB9C3, 0.6);
+        light.position.set(0, 10, 0);
+        scene.add(light);
+        lights.push(light);
+
+        light = new Three.DirectionalLight(0xFFFFFF, 0.25);
+        light.position.set(5, 5, -7.5);
+        light.shadow.mapSize.set(1024,1024);
+        light.shadow.radius = 5;
+        scene.add(light);
+        lights.push(light);
+
+
+    }
+
+    _updateScene2() {
+        renderer.shadowMap.enabled = params.enableShadows;
+        lights.forEach(light => light.castShadow = params.enableShadows);
+        this.group && (this.group.castShadow = params.enableShadows);
+    }
+
+    _scene1() {
         // scene
         scene = new Three.Scene();
         scene.background = new Three.Color( 0xa0a0a0 );
@@ -150,29 +211,15 @@ export class App {
             return light;
         });
 
-        // renderer
-        renderer = new Three.WebGLRenderer({ antialias: true });
-        renderer.setPixelRatio(window.devicePixelRatio);
-        renderer.setSize(window.innerWidth, window.innerHeight);
-        document.body.appendChild(renderer.domElement);
-
-        // controls
-        controls = new OrbitControls(camera, renderer.domElement);
-        controls.addEventListener('change', () => {
-            localStorage.setItem('camPos', JSON.stringify(camera.position));
-        });
-
         // permanent objects
         ground = new Three.Mesh(
             new Three.PlaneBufferGeometry( 10000, 10000 ),
             new Three.MeshPhongMaterial( { color: 0x999999, depthWrite: false } ) );
         ground.rotation.x = - Math.PI / 2;
         scene.add( ground );
+    }
 
-        this._updateScene();
-    };
-
-    _updateScene() {
+    _updateScene1() {
         // fog
         scene.fog = params.enableFog ? new Three.FogExp2( 0xa0a0a0, 0.0005 ) : null;
 
