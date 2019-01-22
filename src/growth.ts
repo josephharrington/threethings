@@ -62,7 +62,11 @@ export class Growth extends AppPlugin {
 
         gui.add(Tree, 'branchDP', 9400, 10000).step(1).onChange(reset);
         gui.add(Tree, 'branchShrink', 0, 1 ).step(0.05).onChange(reset);
+        gui.add(Tree, 'maxLevel', 1, 15 ).step(1).onChange(reset);
         gui.add(Branch, 'initialP', 0, 1).step(0.05).onChange(reset);
+        gui.add(Branch, 'dy', 1, 100).step(1).onChange(reset);
+        gui.add(Branch, 'maxV', 0, 1).step(0.01).onChange(reset);
+        gui.add(Branch, 'k', 0, 10).step(0.1).onChange(reset);
 
         const growthFolder = gui.addFolder('growth params');
         growthFolder.open();

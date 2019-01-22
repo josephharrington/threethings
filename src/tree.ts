@@ -8,6 +8,7 @@ const MAX_BRANCHES = 100;
 export class Tree {
     static branchDP = 9999;
     static branchShrink = 0.9;
+    static maxLevel = 5;
 
     trunk: Branch;
     branches: Branch[];
@@ -21,6 +22,7 @@ export class Tree {
     grow(): boolean {
         let stillGrowing = false;
         let spawnedBranches: Branch[] = [];
+        const maxD = Branch.maxV * Branch.dy;
 
         for (let branch of this.branches) {
             if (branch.y >= TREE_HEIGHT * Math.pow(Tree.branchShrink, branch.level)) {
@@ -29,16 +31,16 @@ export class Tree {
                 stillGrowing = true;
             }
 
-            branch.vx = pin(branch.vx + random(-branch.k, branch.k), -branch.maxV, branch.maxV);
-            branch.vz = pin(branch.vz + random(-branch.k, branch.k), -branch.maxV, branch.maxV);
+            branch.vx = pin(branch.vx + random(-Branch.k, Branch.k), -maxD, maxD);
+            branch.vz = pin(branch.vz + random(-Branch.k, Branch.k), -maxD, maxD);
             branch.addPt(new Vector3(
                 branch.x + branch.vx,
-                branch.y + branch.dy,
+                branch.y + Branch.dy,
                 branch.z + branch.vz));
             branch.segments += branch.dSegments;
-            branch.p = 1 - ((1-branch.p) * Math.pow(Tree.branchDP/10000, branch.dy));
+            branch.p = 1 - ((1-branch.p) * Math.pow(Tree.branchDP/10000, Branch.dy));
 
-            if (this.branches.length < MAX_BRANCHES) {
+            if (this.branches.length < MAX_BRANCHES && branch.level < Tree.maxLevel) {
                 // todo: limit branches added to <= MAX
                 spawnedBranches = spawnedBranches.concat(branch.spawn());
             }
@@ -51,9 +53,10 @@ export class Tree {
 
 
 export class Branch {
-
-
     static initialP = 0.2;  // starting probability of branching
+    static dy = 10;
+    static maxV = 0.3;  // todo: specify as angle
+    static k = 1;
 
     points: Array<Vector3> = [];
     path: CurvePath<Vector3> = new CurvePath();
@@ -65,10 +68,6 @@ export class Branch {
     p = Branch.initialP;  // current probability of branching
     vx = 0;
     vz = 0;
-    dy = 10;
-    maxV = 0.3 * this.dy;  // todo: specify as angle
-    // maxA = 45;
-    k = 1;
 
     constructor(public parent: Branch) {
         if (this.parent) {
@@ -77,8 +76,8 @@ export class Branch {
             this.level = this.parent.level + 1;
             // this.vx = parent.vx;
             // this.vz = parent.vz;
-            this.vx = parent.vx + random(-this.k, this.k);
-            this.vz = parent.vx + random(-this.k, this.k);
+            this.vx = parent.vx + random(-Branch.k, Branch.k);
+            this.vz = parent.vx + random(-Branch.k, Branch.k);
             this.vz = parent.vz;
             // this.vx = random(-this.maxV, this.maxV);
             // this.vz = random(-this.maxV, this.maxV);
