@@ -41,6 +41,8 @@ export class Growth extends AppPlugin {
     lineMaterial: Material;
     meshMaterial: Material;
 
+    insetCanvas: InsetCanvas;
+
     constructor() {
         super();
         this.lineMaterial = new LineBasicMaterial({
@@ -51,6 +53,8 @@ export class Growth extends AppPlugin {
 
     createGui(gui: dat.GUI, refreshWith: Function): void {
         log.debug('growth.createGui');
+        this.insetCanvas = new InsetCanvas({width: 300, height: 200});
+
         const reset = refreshWith(() => this.update());
 
         gui.add(params, 'useSplines').onChange(reset);
@@ -63,15 +67,12 @@ export class Growth extends AppPlugin {
         gui.add(Tree, 'branchDP', 9400, 10000).step(1).onChange(reset);
         gui.add(Tree, 'branchShrink', 0, 1 ).step(0.05).onChange(reset);
         gui.add(Tree, 'maxLevel', 1, 15 ).step(1).onChange(reset);
-        gui.add(Branch, 'initialP', 0, 1).step(0.05).onChange(reset);
+        gui.add(Branch, 'initialP', 0, 1).step(0.02).onChange(reset);
         gui.add(Branch, 'dy', 1, 100).step(1).onChange(reset);
         gui.add(Branch, 'maxV', 0, 1).step(0.01).onChange(reset);
         gui.add(Branch, 'k', 0, 10).step(0.1).onChange(reset);
 
-        const growthFolder = gui.addFolder('growth params');
-        growthFolder.open();
-
-        growthFolder.add(this, 'replant');
+        gui.add(this, 'replant');
     }
 
     replant() {
@@ -110,6 +111,11 @@ export class Growth extends AppPlugin {
                 } else {
                     this.group.add(this.newMesh(geom));
                 }
+            }
+
+            this.insetCanvas.clear();
+            for (let b of this.tree.branches) {
+                this.insetCanvas.circle(b.x, b.z,   this.branchRadius(b));
             }
         }, GROWTH_INTERVAL);
     }
@@ -258,5 +264,62 @@ class TaperedTubeBufferGeometry extends TubeBufferGeometry {
         norms.push(firstNorm.x, firstPt.y, firstPt.z);
         norms.push(lastNorm.x, lastNorm.y, lastNorm.z);
         this.setIndex(indices);
+    }
+}
+
+
+class InsetCanvas {
+    canvas: HTMLCanvasElement;
+    ctx: CanvasRenderingContext2D;
+
+    constructor({width, height}: {
+        width: number,
+        height: number,
+    }) {
+        const canvas = document.createElement('canvas');
+        document.body.appendChild(canvas);
+
+        canvas.id = "GrowthInset";
+        canvas.width  = width;
+        canvas.height = height;
+        canvas.style.zIndex = '8';
+        canvas.style.position = "absolute";
+        canvas.style.left = '0';
+        canvas.style.top = '0';
+        canvas.style.width = `${width}px`;
+        canvas.style.height = `${height}px`;
+        canvas.style.border = "1px solid";
+        this.canvas = canvas;
+
+        const ctx = canvas.getContext('2d');
+        ctx.lineWidth = 0.5;
+        // ctx.shadowOffsetX = 0;
+        // ctx.shadowOffsetY = 0;
+        // ctx.shadowBlur = 5;
+        // ctx.shadowColor = '#000000';
+        ctx.translate(width/2, height/2);
+        this.ctx = ctx;
+
+        this.clear();
+    }
+
+    clear() {
+        this.ctx.clearRect(-this.canvas.width/2, -this.canvas.height/2, this.canvas.width, this.canvas.height);
+        this.ctx.globalAlpha = 0.8;
+        this.ctx.fillStyle = 'black';
+        this.ctx.fillRect(-this.canvas.width/2, -this.canvas.height/2, this.canvas.width, this.canvas.height);
+        // this.ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
+    }
+
+    circle(x: number, y: number, r: number) {
+        this.ctx.beginPath();
+        this.ctx.arc(x, y, r, 0, Math.PI * 2);
+        this.ctx.closePath();
+        this.ctx.globalAlpha = 0.1;
+        this.ctx.fillStyle = '#b45c5f';
+        this.ctx.fill();
+        this.ctx.globalAlpha = 1;
+        this.ctx.strokeStyle = '#e4a9a1';
+        this.ctx.stroke();
     }
 }

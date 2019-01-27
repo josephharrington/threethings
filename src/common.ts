@@ -69,7 +69,7 @@ export class App {
         this._initScene();
 
         this.pluginsMap = collectEntries(plugins, plugin => plugin.constructor.name);
-        if (localStorage.getItem('selectedPlugin')) {
+        if (localStorage.getItem('selectedPlugin')) {  // todo: abstract local storage saves
             params.selectedPlugin = localStorage.getItem('selectedPlugin');
         } else {
             params.selectedPlugin = Object.keys(this.pluginsMap)[0];
