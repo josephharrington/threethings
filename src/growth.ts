@@ -75,11 +75,11 @@ export class Growth extends AppPlugin {
         gui.add(Branch, 'k', 0, 10).step(0.1).onChange(reset);
 
         gui.add(this, 'regrow');
-        gui.add(this, 'reseed').onChange(() => seedController.updateDisplay());
+        gui.add({'reseed': () => { this.reseed(); seedController.updateDisplay(); }}, 'reseed');
     }
 
     reseed() {
-        Tree.seed = new Random(Tree.seed.toString()).inRange(1, 100000);
+        Tree.seed = Math.floor(new Random(Tree.seed.toString()).inRange(1, 100000));
         this.regrow();
     }
 
@@ -88,18 +88,18 @@ export class Growth extends AppPlugin {
 
         this.group.remove(...this.group.children);
 
-        this.tree = new Tree();
-        this.tree.grow();
-        this.tree.grow();
+        const tree = new Tree();
+        tree.grow();
+        tree.grow();
 
         if (this.intId) {
             clearInterval(this.intId);
         }
         this.intId = setInterval(() => {
             log.debug('growing');
-            const shouldContinue = this.tree.grow();
+            const shouldContinue = tree.grow();
             if (!shouldContinue) {
-                log.debug(`done growing, num branches: ${this.tree.branches.length}`);
+                log.debug(`done growing, num branches: ${tree.branches.length}`);
                 clearInterval(this.intId);
                 this.intId = 0;
                 return;
@@ -107,7 +107,7 @@ export class Growth extends AppPlugin {
 
             let i = -1;
             // todo: this loop is jank -- decouple geometries and child indices
-            for (let geom of this.getTreeGeoms()) {
+            for (let geom of this.getTreeGeoms(tree)) {
                 i++;
                 if (i < this.group.children.length) {
                     const child = this.group.children[i];
@@ -122,10 +122,12 @@ export class Growth extends AppPlugin {
             }
 
             this.insetCanvas.clear();
-            for (let b of this.tree.branches) {
-                this.insetCanvas.circle(b.x, b.z,   this.branchRadius(b));
+            for (let b of tree.branches) {
+                this.insetCanvas.circle(b.x, b.z, this.branchRadius(b));
             }
         }, GROWTH_INTERVAL);
+
+        this.tree = tree;
     }
 
     newMesh(geom: Geometry | BufferGeometry): Mesh {
@@ -158,7 +160,7 @@ export class Growth extends AppPlugin {
         if (!this.tree) {
             this.regrow();
         }
-        for (let geom of this.getTreeGeoms()) {
+        for (let geom of this.getTreeGeoms(this.tree)) {
             this.group.add(this.newMesh(geom));
         }
 
@@ -173,8 +175,8 @@ export class Growth extends AppPlugin {
         return params.radius * Math.pow(params.branchChildRadius, branch.level);
     }
 
-    *getTreeGeoms() {
-        for (let branch of this.tree.branches) {
+    *getTreeGeoms(tree: Tree) {
+        for (let branch of tree.branches) {
             const spline = params.useSplines ? new CatmullRomCurve3(branch.points) : branch.path;
 
             // const radiusFn = (t: number) => 0.5 + 0.5*Math.sin(2 * Math.PI * (t-0.25));
