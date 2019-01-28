@@ -1,4 +1,5 @@
-import {CurvePath, LineCurve3, Vector3} from "three";
+import { CurvePath, LineCurve3, Vector3 } from 'three';
+import { Random } from './random';
 
 
 const TREE_HEIGHT = 400;
@@ -6,16 +7,19 @@ const MAX_BRANCHES = 100;
 
 
 export class Tree {
-    static branchDP = 9999;
+    static branchDP = 9950;
     static branchShrink = 0.9;
     static maxLevel = 5;
+    static seed = 12345;
 
     trunk: Branch;
     branches: Branch[];
     height = 400;
+    rand: Random;
 
     constructor() {
-        this.trunk = new Branch(null);
+        this.rand = new Random(Tree.seed.toString());
+        this.trunk = new Branch(this);
         this.branches = [this.trunk];
     }
 
@@ -31,8 +35,8 @@ export class Tree {
                 stillGrowing = true;
             }
 
-            branch.vx = pin(branch.vx + random(-Branch.k, Branch.k), -maxD, maxD);
-            branch.vz = pin(branch.vz + random(-Branch.k, Branch.k), -maxD, maxD);
+            branch.vx = pin(branch.vx + this.rand.inRange(-Branch.k, Branch.k), -maxD, maxD);
+            branch.vz = pin(branch.vz + this.rand.inRange(-Branch.k, Branch.k), -maxD, maxD);
             branch.addPt(new Vector3(
                 branch.x + branch.vx,
                 branch.y + Branch.dy,
@@ -53,11 +57,13 @@ export class Tree {
 
 
 export class Branch {
-    static initialP = 0.2;  // starting probability of branching
+    static initialP = 0.4;  // starting probability of branching
     static dy = 10;
     static maxV = 0.3;  // todo: specify as angle
     static k = 1;
 
+    parent: Tree|Branch;
+    rand: Random;
     points: Array<Vector3> = [];
     path: CurvePath<Vector3> = new CurvePath();
     level: number;
@@ -69,15 +75,17 @@ export class Branch {
     vx = 0;
     vz = 0;
 
-    constructor(public parent: Branch) {
-        if (this.parent) {
+    constructor(parent: Tree|Branch) {
+        this.parent = parent;
+        this.rand = parent.rand;
+        if (parent instanceof Branch) {
             this.addPt(parent.points[parent.points.length-2]);
             this.addPt(parent.points[parent.points.length-1]);
-            this.level = this.parent.level + 1;
+            this.level = parent.level + 1;
             // this.vx = parent.vx;
             // this.vz = parent.vz;
-            this.vx = parent.vx + random(-Branch.k, Branch.k);
-            this.vz = parent.vx + random(-Branch.k, Branch.k);
+            this.vx = parent.vx + this.rand.inRange(-Branch.k, Branch.k);
+            this.vz = parent.vx + this.rand.inRange(-Branch.k, Branch.k);
             this.vz = parent.vz;
             // this.vx = random(-this.maxV, this.maxV);
             // this.vz = random(-this.maxV, this.maxV);
@@ -110,23 +118,19 @@ export class Branch {
             for (let i = 0; i < numBranchesToSpawn; i++) {
                 const newBranch = new Branch(this);
                 spawnedBranches.push(newBranch);
-                this.p = Branch.initialP;
+                // this.p = Branch.initialP;
+                this.p = 0;
             }
         }
         return spawnedBranches;
     }
 
     private numBranchesToSpawn() { // todo: different random instances for each thing
-        return Math.random() < this.p ? 1 : 0;
+        return this.rand.next() < this.p ? 1 : 0;
     }
 }
 
 
 function pin(value: number, min: number, max: number) {
     return Math.min(Math.max(value, min), max);
-}
-
-
-function random(min: number, max: number): number {
-    return (Math.random() * (max - min)) + min;
 }
