@@ -7,10 +7,10 @@ const MAX_BRANCHES = 100;
 
 
 export class Tree {
-    static branchDP = 9950;
-    static branchShrink = 0.9;
-    static maxLevel = 5;
     static seed = 12345;
+    private static branchDP = 9950;
+    private static branchShrink = 0.9;
+    private static maxLevel = 5;
 
     trunk: Branch;
     branches: Branch[];

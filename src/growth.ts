@@ -16,6 +16,7 @@ import { AppPlugin, isGeometric, dispose, Geometric } from './common';
 import { Branch, Tree } from "./tree";
 
 import { easeOutQuart } from "./util/easing";
+import {Random} from "./random";
 
 
 const GROWTH_INTERVAL = 30;
@@ -64,7 +65,7 @@ export class Growth extends AppPlugin {
         gui.add(params, 'branchChildRadius', 0, 1).onChange(reset);
         gui.add(params, 'showWireframe').onChange(reset);
 
-        gui.add(Tree, 'seed', 1, 100000).step(1).onChange(reset);
+        const seedController = gui.add(Tree, 'seed', 1, 100000).step(1).onChange(reset);
         gui.add(Tree, 'branchDP', 8000, 10000).step(5).onChange(reset);
         gui.add(Tree, 'branchShrink', 0, 1 ).step(0.05).onChange(reset);
         gui.add(Tree, 'maxLevel', 1, 15 ).step(1).onChange(reset);
@@ -73,11 +74,17 @@ export class Growth extends AppPlugin {
         gui.add(Branch, 'maxV', 0, 1).step(0.01).onChange(reset);
         gui.add(Branch, 'k', 0, 10).step(0.1).onChange(reset);
 
-        gui.add(this, 'replant');
+        gui.add(this, 'regrow');
+        gui.add(this, 'reseed').onChange(() => seedController.updateDisplay());
     }
 
-    replant() {
-        log.info('growth.replant');
+    reseed() {
+        Tree.seed = new Random(Tree.seed.toString()).inRange(1, 100000);
+        this.regrow();
+    }
+
+    regrow() {
+        log.info('growth.regrow');
 
         this.group.remove(...this.group.children);
 
@@ -149,7 +156,7 @@ export class Growth extends AppPlugin {
 
         this.group = new Group();
         if (!this.tree) {
-            this.replant();
+            this.regrow();
         }
         for (let geom of this.getTreeGeoms()) {
             this.group.add(this.newMesh(geom));
