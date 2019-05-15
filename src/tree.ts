@@ -8,7 +8,7 @@ const MAX_BRANCHES = 100;
 
 export class Tree {
     static seed = 12345;
-    private static branchDP = 9950;
+    private static branchDP = 9990;
     private static branchShrink = 0.9;
     private static maxLevel = 5;
 

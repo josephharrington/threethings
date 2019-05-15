@@ -66,7 +66,7 @@ export class Growth extends AppPlugin {
         gui.add(params, 'showWireframe').onChange(reset);
 
         const seedController = gui.add(Tree, 'seed', 1, 100000).step(1).onChange(reset);
-        gui.add(Tree, 'branchDP', 8000, 10000).step(5).onChange(reset);
+        gui.add(Tree, 'branchDP', 8000, 10000).step(1).onChange(reset);
         gui.add(Tree, 'branchShrink', 0, 1 ).step(0.05).onChange(reset);
         gui.add(Tree, 'maxLevel', 1, 15 ).step(1).onChange(reset);
         gui.add(Branch, 'initialP', 0, 1).step(0.02).onChange(reset);
