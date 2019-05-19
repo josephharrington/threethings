@@ -85,7 +85,8 @@ export class Spiro extends AppPlugin {
         const { bigR, loopRatio, spinNumer, spinDenom } = this;
         const spinRatio = spinNumer / spinDenom;
         if (this.numPts > 1000) {
-            return;
+            console.warn('cannot draw when numPts > 1000');
+            return new Group();
         }
         const points = [];
         for (let t = 0.0; t - this.dt <= 2 * Math.PI * this.numRots; t += this.dt) {

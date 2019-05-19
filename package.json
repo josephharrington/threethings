@@ -3,29 +3,26 @@
   "version": "1.0.0",
   "description": "",
   "main": "index.js",
-  "dependencies": {
+  "devDependencies": {
+    "@babel/core": "^7.4.4",
+    "@babel/plugin-transform-runtime": "^7.4.4",
+    "@babel/runtime-corejs2": "^7.4.4",
     "@types/dat.gui": "^0.7.2",
     "@types/loglevel": "^1.5.3",
     "@types/seedrandom": "^2.4.27",
     "@types/three": "^0.93.14",
     "dat.gui": "^0.7.3",
     "loglevel": "^1.6.1",
+    "parcel-bundler": "^1.12.3",
     "seedrandom": "^2.4.4",
-    "three": "^0.97.0"
-  },
-  "devDependencies": {
-    "ts-loader": "^5.3.2",
-    "typescript": "^3.2.2",
-    "webpack": "^4.28.2",
-    "webpack-cli": "^3.1.2",
-    "webpack-dev-server": "^3.1.14"
+    "three": "^0.97.0",
+    "typescript": "^3.4.5"
   },
   "scripts": {
     "deploy": "script/deploy.sh",
-    "test": "echo \"Error: no test specified\" && exit 1",
-    "build": "webpack",
-    "watch": "webpack --watch",
-    "serve": "webpack-dev-server --open  # something broken"
+    "clean": "rm dist/bundle.js",
+    "start": "parcel src/index.html",
+    "build-prod": "parcel build src/index.html"
   },
   "author": "",
   "license": "ISC"

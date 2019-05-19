@@ -7,7 +7,9 @@ const _thing = (
     propertyKey: string,
     descriptor: TypedPropertyDescriptor<() => three.Object3D>
 ) => {
-    _things[propertyKey] = descriptor.value;
+    if (descriptor.value) {
+        _things[propertyKey] = descriptor.value;
+    }
 };
 
 export const thing = Object.assign(_thing, { things: _things });

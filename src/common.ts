@@ -16,7 +16,7 @@ export interface Geometric extends Three.Object3D {
     geometry: Three.Geometry | Three.BufferGeometry;
 }
 
-export function isGeometric(obj: Three.Object3D): obj is Geometric {
+export function isGeometric(obj: Three.Object3D|null|undefined): obj is Geometric {
     return obj != null && (<Geometric>obj).geometry !== undefined;
 }
 
@@ -53,8 +53,8 @@ export function dispose(obj: Object3D) {
 export class App {
 
     exporter: any = new STLExporter();  // couldn't get STLExporter type working
-    gui: dat.GUI = null;
-    group: Three.Group = null;
+    gui: dat.GUI|null = null;
+    group: Three.Group|null = null;
     pluginsMap: {[key: string]: AppPlugin};
 
     // scene: Three.Scene;
@@ -66,11 +66,12 @@ export class App {
 
     constructor(plugins: AppPlugin[]) {
         this._initDownload();
+        // this._link = document.createElement('a');
         this._initScene();
 
         this.pluginsMap = collectEntries(plugins, plugin => plugin.constructor.name);
         if (localStorage.getItem('selectedPlugin')) {  // todo: abstract local storage saves
-            params.selectedPlugin = localStorage.getItem('selectedPlugin');
+            params.selectedPlugin = localStorage.getItem('selectedPlugin') || 'none';
         } else {
             params.selectedPlugin = Object.keys(this.pluginsMap)[0];
         }
@@ -133,8 +134,9 @@ export class App {
         log.debug('common._initScene');
         // camera
         camera = new Three.PerspectiveCamera(50, window.innerWidth / window.innerHeight, 0.01, 10000);
-        if (localStorage.getItem('camPos') !== null) {
-            const camPos = JSON.parse(localStorage.getItem('camPos'));
+        const savedCamPos = localStorage.getItem('camPos');
+        if (savedCamPos !== null) {
+            const camPos = JSON.parse(savedCamPos);
             camera.position.set(camPos.x, camPos.y, camPos.z);
         } else {
             camera.position.set(0, CAM_HEIGHT * 1.4, CAM_HEIGHT * 1.7);
@@ -240,7 +242,7 @@ export class App {
         animator.start(fps);
     };
 
-    _link: HTMLAnchorElement;
+    _link: HTMLAnchorElement|null = null;
 
     _initDownload() {
         this._link = document.createElement('a');
@@ -253,6 +255,9 @@ export class App {
     };
 
     _save(blob: Blob, filename: string) {
+        if (!this._link) {
+            return;
+        }
         this._link.href = URL.createObjectURL( blob );
         this._link.download = filename;
         this._link.click();
@@ -262,22 +267,23 @@ export class App {
 }
 
 class Animator {
-    fpsInterval: number;
-    startTime: number;
-    now: number;
-    then: number;
-    elapsed: number;
+    fpsInterval?: number;
+    now?: number;
+    then?: number;
+    elapsed?: number;
 
     constructor(private renderFn: Function) { }
 
     start(fps: number) {
         this.fpsInterval = 1000 / fps;
         this.then = Date.now();
-        this.startTime = this.then;
         this._animate();
     };
 
     _animate() {
+        if (this.then == undefined || this.fpsInterval == undefined) {
+            throw new Error('_animate() called without calling start() first')
+        }
         requestAnimationFrame(() => this._animate());
 
         this.now = Date.now();

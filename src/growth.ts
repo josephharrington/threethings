@@ -36,13 +36,13 @@ export class Growth extends AppPlugin {
     heightOffGround = 300;
     intId: number = 0;
 
-    group: Group = null;
-    tree: Tree = null;
+    group: Group|null = null;
+    tree: Tree|null = null;
 
     lineMaterial: Material;
     meshMaterial: Material;
 
-    insetCanvas: InsetCanvas;
+    insetCanvas: InsetCanvas|null = null;
 
     constructor() {
         super();
@@ -83,8 +83,11 @@ export class Growth extends AppPlugin {
         this.regrow();
     }
 
-    regrow() {
+    regrow(): Tree {
         log.info('growth.regrow');
+        if (this.group === null) {
+            throw new Error('group is null. Call update() first.');
+        }
 
         this.group.remove(...this.group.children);
 
@@ -107,6 +110,9 @@ export class Growth extends AppPlugin {
 
             let i = -1;
             // todo: this loop is jank -- decouple geometries and child indices
+            if (!this.group) {
+                throw new Error('group is null. Call update() first.')
+            }
             for (let geom of this.getTreeGeoms(tree)) {
                 i++;
                 if (i < this.group.children.length) {
@@ -121,13 +127,16 @@ export class Growth extends AppPlugin {
                 }
             }
 
-            this.insetCanvas.clear();
-            for (let b of tree.branches) {
-                this.insetCanvas.circle(b.x, b.z, this.branchRadius(b));
+            if (this.insetCanvas) {
+                this.insetCanvas.clear();
+                for (let b of tree.branches) {
+                    this.insetCanvas.circle(b.x, b.z, this.branchRadius(b));
+                }
             }
         }, GROWTH_INTERVAL);
 
         this.tree = tree;
+        return this.tree;
     }
 
     newMesh(geom: Geometry | BufferGeometry): Mesh {
@@ -158,7 +167,7 @@ export class Growth extends AppPlugin {
 
         this.group = new Group();
         if (!this.tree) {
-            this.regrow();
+            this.tree = this.regrow();
         }
         for (let geom of this.getTreeGeoms(this.tree)) {
             this.group.add(this.newMesh(geom));
@@ -302,6 +311,9 @@ class InsetCanvas {
         this.canvas = canvas;
 
         const ctx = canvas.getContext('2d');
+        if (ctx === null) {
+            throw new Error('canvas.getContext("2d") returned null')
+        }
         ctx.lineWidth = 0.5;
         // ctx.shadowOffsetX = 0;
         // ctx.shadowOffsetY = 0;

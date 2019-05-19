@@ -10,7 +10,7 @@ export class Sandbox extends AppPlugin {
     pointMaterial: three.Material;
     lineMaterial: three.Material;
     meshMaterial: three.Material;
-    group: three.Group;
+    group: three.Group|null = null;
 
     showNormals = false;
     selectedThing = this.vine.name;
@@ -48,7 +48,7 @@ export class Sandbox extends AppPlugin {
     }
 
     @thing
-    customBufferGeom(): three.Mesh {
+    customBufferGeom(): three.Object3D {
         // from https://threejs.org/docs/#api/en/core/BufferGeometry
         const geometry = new three.BufferGeometry();
         // create a simple square shape. We duplicate the top left and bottom right
@@ -70,7 +70,7 @@ export class Sandbox extends AppPlugin {
     }
 
     @thing
-    tubeGeom(): three.Mesh {
+    tubeGeom(): three.Object3D {
         const path = new CustomSinCurve(50);
         const tubularSegments = 10;
         const radius = 10;
@@ -81,7 +81,7 @@ export class Sandbox extends AppPlugin {
     }
 
     @thing
-    closedTubeGeom(): three.Mesh {
+    closedTubeGeom(): three.Object3D {
         const path = new CustomSinCurve(50);
         const tubularSegments = 100;
         const radius = 10;

@@ -1,3 +1,5 @@
+import './styles.css';
+
 import * as log from 'loglevel';
 
 import { App } from './common';

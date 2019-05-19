@@ -1,11 +1,19 @@
 {
   "compilerOptions": {
     "outDir": "./dist/",
+    "sourceMap": true,
+    "strict": true,
+    "noImplicitReturns": true,
     "noImplicitAny": true,
     "module": "es6",
-    "target": "es6",
+    "moduleResolution": "node",
+    "resolveJsonModule": true,
+    "allowSyntheticDefaultImports": true,
+    "target": "es2015",
     "allowJs": true,
-    "sourceMap": true,
     "experimentalDecorators": true
-  }
+  },
+  "include": [
+    "./src/**/*"
+  ]
 }
