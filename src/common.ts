@@ -72,8 +72,10 @@ export class App {
         this.pluginsMap = collectEntries(plugins, plugin => plugin.constructor.name);
         if (localStorage.getItem('selectedPlugin')) {  // todo: abstract local storage saves
             params.selectedPlugin = localStorage.getItem('selectedPlugin') || 'none';
+            log.debug(`Loaded saved plugin selection: ${params.selectedPlugin}`);
         } else {
             params.selectedPlugin = Object.keys(this.pluginsMap)[0];
+            log.debug(`No saved plugin selection. Default: ${params.selectedPlugin}`);
         }
         this._setPlugin();
     }
@@ -82,20 +84,20 @@ export class App {
         this.initGui(this.pluginsMap[params.selectedPlugin]);
         this.refreshGroup(() => this.pluginsMap[params.selectedPlugin].update());
         localStorage.setItem('selectedPlugin', params.selectedPlugin);
+        log.debug(`Saved plugin selection: ${params.selectedPlugin}`);
     };
 
     initGui(plugin: AppPlugin) {
         this.gui && this.gui.destroy();
         this.gui = new dat.GUI();
-        const setPlugin = () => this._setPlugin();
 
         plugin.createGui(this.gui,
             (getNewGroup: any) => () => this.refreshGroup(getNewGroup));  // todo: something better
 
         const sceneGui = this.gui.addFolder('Scene');
-        sceneGui.add(params, 'enableFog').onChange(this._updateScene);
-        sceneGui.add(params, 'enableShadows').onChange(this._updateScene);
-        sceneGui.add(params, 'selectedPlugin', Object.keys(this.pluginsMap)).onChange(setPlugin);
+        sceneGui.add(params, 'enableFog').onChange(() => this._updateScene());
+        sceneGui.add(params, 'enableShadows').onChange(() => this._updateScene());
+        sceneGui.add(params, 'selectedPlugin', Object.keys(this.pluginsMap)).onChange(() => this._setPlugin());
         sceneGui.open();
 
         this.gui.add(this, 'saveStl');
