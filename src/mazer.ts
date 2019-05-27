@@ -58,6 +58,7 @@ export class Mazer extends AppPlugin {
         gui.add(this, 'bigR', 10, 500).step(1).onChange(init);
         gui.add(this, 'numPts', 1, 100).step(1).onChange(init);
         gui.add({init}, 'init');
+        gui.add(this, 'doOneIteration');
         gui.add(this, 'toggleIteration');
     }
 
@@ -82,6 +83,12 @@ export class Mazer extends AppPlugin {
         return this.group;
     }
 
+    private doOneIteration() {
+        if (!this.maze) throw new Error('null maze');
+        this.maze.step();
+        this.regenMesh();
+    }
+
     private toggleIteration(targetState?: boolean) {
         this.isIterating = (targetState !== undefined) ? targetState : !this.isIterating;
         if (this.intId) {
@@ -90,9 +97,7 @@ export class Mazer extends AppPlugin {
         }
         if (this.isIterating) {
             this.intId = setInterval(() => {
-                if (!this.maze) throw new Error('null maze');
-                this.maze.step();
-                this.regenMesh();
+                this.doOneIteration()
             }, ITERATION_DELAY);
         }
     }
@@ -138,27 +143,17 @@ class Maze {
         const currPoints = this.curves[0];
         const nextPoints: Vector3[] = [];
         for (let i = 0; i < currPoints.length; i++) {
-            const prevPt = currPoints[i];
-            const newPt = prevPt.clone();
-            // newPt.x += 1;
-            // newPt.y += 1;
-            // newPt.z += 1;
-
-            newPt
-                .add(this.brownian(newPt))
-                .add(this.fairing(newPt))
-                .add(this.attractRepel(newPt));
+            const pt = currPoints[i];
+            const leftPt = currPoints[i-1] || currPoints[currPoints.length-1];
+            const rightPt = currPoints[i+1] || currPoints[0];
+            const newPt = pt.clone()
+                // .add(this.brownian(pt))
+                .add(this.fairing(leftPt, pt, rightPt))
+                .add(this.attractRepel(pt));
             nextPoints.push(newPt);
         }
         this.curves[0] = nextPoints;
         return this.curves[0];
-    }
-
-    private brownian(pt: Vector3): Vector3 {
-        return this.randVectorXZ()
-            .multiplyScalar(this.browningAmplitude(pt))
-            .multiplyScalar(this.scale(pt))
-            .multiplyScalar(this.samplingRate());
     }
 
     private randVectorXZ(): Vector3 {
@@ -168,25 +163,50 @@ class Maze {
         return v.normalize();
     }
 
-    private fairing(pt: Vector3): Vector3 {
-        return new Vector3();
+    /**
+     * "To control random structural variations, a random offset vector (chosen stochastically based on a Normal
+     * Distribution with mean 0 and variance σ), zi, is added to each sample point, pi, using the equation:
+     *     Bi = fB(pi) · zi · δ(pi) · D
+     */
+    private brownian(pt: Vector3): Vector3 {
+        return this.randVectorXZ()
+            .multiplyScalar(this.browningAmplitude(pt))
+            .multiplyScalar(this.delta(pt))
+            .multiplyScalar(this.samplingRate());
+    }
+
+    /** "To simulate local smoothness, a Laplacian term is added..." */
+    private fairing(leftPt: Vector3, pt: Vector3, rightPt: Vector3): Vector3 {
+        const deltaR = this.delta(rightPt);
+        const deltaL = this.delta(leftPt);
+        const n1 = leftPt.multiplyScalar(deltaR);
+        const n2 = rightPt.multiplyScalar(deltaL);
+        const mid = n1.add(n2).divideScalar(deltaL + deltaR);
+
+        return mid.sub(pt).multiplyScalar(this.fairingAmplitude(pt));
     }
 
     private attractRepel(pt: Vector3): Vector3 {
         return new Vector3();
     }
 
-    /** δ : R2→(0,1] is used to control the scale of the patterns and support self-similiarity */
-    private scale(pt: Vector3): number {
+    /** "δ : R2→(0,1] is used to control the scale of the patterns and support self-similiarity" */
+    private delta(pt: Vector3): number {
         return 1;  // todo: implement texture map
     }
 
-    /** fB : R2→R modulates the amplitude of the offset */
+    /** "fB : R2→R modulates the amplitude of the offset" */
     private browningAmplitude(pt: Vector3): number {
         return 1;
     }
 
+    /** "Note that the sampling rate can be controlled globally by changing D" */
     private samplingRate(): number {
+        return 1;
+    }
+
+    /** "ff: R2→[0; 1] allows the fairing to vary spatially" */
+    private fairingAmplitude(pt: Vector3): number {
         return 1;
     }
 }
