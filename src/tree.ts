@@ -1,5 +1,5 @@
 import { CurvePath, LineCurve3, Vector3 } from 'three';
-import { Random } from './random';
+import { Random } from './util/random';
 
 
 const TREE_HEIGHT = 400;

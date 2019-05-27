@@ -16,7 +16,7 @@ import { AppPlugin, isGeometric, dispose, Geometric } from './common';
 import { Branch, Tree } from "./tree";
 
 import { easeOutQuart } from "./util/easing";
-import {Random} from "./random";
+import {Random} from "./util/random";
 
 
 const GROWTH_INTERVAL = 30;
