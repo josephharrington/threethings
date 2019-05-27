@@ -56,7 +56,7 @@ export class Growth extends AppPlugin {
         log.debug('growth.createGui');
         this.insetCanvas = new InsetCanvas({width: 300, height: 200});
 
-        const reset = refreshWith(() => this.update());
+        const reset = refreshWith(() => this.init());
 
         gui.add(params, 'useSplines').onChange(reset);
         gui.add(params, 'extrusionSegments', 0, 100).step(1).onChange(reset);
@@ -118,12 +118,12 @@ export class Growth extends AppPlugin {
                 if (i < this.group.children.length) {
                     const child = this.group.children[i];
                     if (isGeometric(child)) {
-                        this.replaceMeshGeom(child, geom);
+                        this.replaceMeshGeom(child, geom, params.showWireframe);
                     } else {
 
                     }
                 } else {
-                    this.group.add(this.newMesh(geom));
+                    this.group.add(this.newMesh(geom, this.meshMaterial, this.lineMaterial, params.showWireframe));
                 }
             }
 
@@ -139,30 +139,7 @@ export class Growth extends AppPlugin {
         return this.tree;
     }
 
-    newMesh(geom: Geometry | BufferGeometry): Mesh {
-        const mesh = new Mesh(geom, this.meshMaterial);
-
-        const wireframe = new LineSegments(geom, this.lineMaterial);
-        wireframe.name = 'wireframe';
-        wireframe.visible = params.showWireframe;
-        mesh.add(wireframe);
-
-        return mesh;
-    }
-
-    replaceMeshGeom(mesh: Geometric, geom: Geometry | BufferGeometry) {
-        dispose(mesh);
-        mesh.geometry = geom;
-
-        const wireframeMesh = mesh.getObjectByName('wireframe');
-        if (!isGeometric(wireframeMesh)) {
-            throw new Error(`Nongeometric wireframe: ${wireframeMesh}`);
-        }
-        wireframeMesh.geometry = geom;
-        wireframeMesh.visible = params.showWireframe;
-    }
-
-    update(): Group {
+    init(): Group {
         log.info('growth.update');
 
         this.group = new Group();
@@ -170,7 +147,7 @@ export class Growth extends AppPlugin {
             this.tree = this.regrow();
         }
         for (let geom of this.getTreeGeoms(this.tree)) {
-            this.group.add(this.newMesh(geom));
+            this.group.add(this.newMesh(geom, this.meshMaterial, this.lineMaterial, params.showWireframe));
         }
 
         // position should be centererd in draw area

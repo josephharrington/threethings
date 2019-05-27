@@ -1,36 +1,87 @@
 import * as dat from 'dat.gui'
-import * as Three from 'three';
+import {
+    BufferGeometry,
+    Camera,
+    Color,
+    DirectionalLight,
+    FogExp2,
+    Geometry,
+    Group,
+    HemisphereLight, Light,
+    LineSegments,
+    Material,
+    Mesh,
+    MeshPhongMaterial,
+    Object3D,
+    PerspectiveCamera,
+    PlaneBufferGeometry,
+    PointLight,
+    Scene,
+    WebGLRenderer
+} from 'three';
 import * as log from 'loglevel';
 
-import { OrbitControls, STLExporter } from './three';
-import {Object3D} from "three";
+import {OrbitControls, STLExporter} from './three';
 import {collectEntries} from "./util/collections";
 
 
 export abstract class AppPlugin {
+    private readonly WIREFRAME = 'wireframe';
+
     createGui(gui: dat.GUI, refreshWith: Function): void { }
-    abstract update(): Three.Group;
+    abstract init(): Group;
+
+    newMesh(
+        geom: Geometry | BufferGeometry,
+        meshMaterial: Material,
+        lineMaterial: Material,
+        showWireframe: boolean
+    ): Mesh {
+        const mesh = new Mesh(geom, meshMaterial);
+
+        const wireframe = new LineSegments(geom, lineMaterial);
+        wireframe.name = this.WIREFRAME;
+        wireframe.visible = showWireframe;
+        mesh.add(wireframe);
+
+        return mesh;
+    }
+
+    replaceMeshGeom(
+        mesh: Geometric, geom: Geometry | BufferGeometry,
+        showWireframe: boolean
+    ) {
+        dispose(mesh);
+        mesh.geometry = geom;
+
+        const wireframeMesh = mesh.getObjectByName(this.WIREFRAME);
+        if (!isGeometric(wireframeMesh)) {
+            throw new Error(`Nongeometric wireframe: ${wireframeMesh}`);
+        }
+        wireframeMesh.geometry = geom;
+        wireframeMesh.visible = showWireframe;
+    }
 }
 
-export interface Geometric extends Three.Object3D {
-    geometry: Three.Geometry | Three.BufferGeometry;
+export interface Geometric extends Object3D {
+    geometry: Geometry | BufferGeometry;
 }
 
-export function isGeometric(obj: Three.Object3D|null|undefined): obj is Geometric {
+export function isGeometric(obj: Object3D|null|undefined): obj is Geometric {
     return obj != null && (<Geometric>obj).geometry !== undefined;
 }
 
 // todo: move into class
-let scene: Three.Scene,
-    renderer: Three.WebGLRenderer,
-    camera: Three.Camera,
-    ground: Three.Mesh,
-    lights: Array<Three.Light>,
+let scene: Scene,
+    renderer: WebGLRenderer,
+    camera: Camera,
+    ground: Mesh,
+    lights: Array<Light>,
     controls: any  // couldn't get OrbitControls working
 ;
 
 const params = {
-    enableFog: false,
+    enableFog: true,
     enableShadows: false,
     selectedPlugin: 'none',
 };
@@ -54,7 +105,7 @@ export class App {
 
     exporter: any = new STLExporter();  // couldn't get STLExporter type working
     gui: dat.GUI|null = null;
-    group: Three.Group|null = null;
+    group: Group|null = null;
     pluginsMap: {[key: string]: AppPlugin};
 
     // scene: Three.Scene;
@@ -70,19 +121,25 @@ export class App {
         this._initScene();
 
         this.pluginsMap = collectEntries(plugins, plugin => plugin.constructor.name);
+        const validValues = Object.keys(this.pluginsMap);
         if (localStorage.getItem('selectedPlugin')) {  // todo: abstract local storage saves
-            params.selectedPlugin = localStorage.getItem('selectedPlugin') || 'none';
+            const savedPlugin = localStorage.getItem('selectedPlugin') || 'none';
+            if (validValues.includes(savedPlugin)) {
+                params.selectedPlugin = savedPlugin;
+            }
             log.debug(`Loaded saved plugin selection: ${params.selectedPlugin}`);
-        } else {
+        }
+
+        if (!validValues.includes(params.selectedPlugin)) {
             params.selectedPlugin = Object.keys(this.pluginsMap)[0];
             log.debug(`No saved plugin selection. Default: ${params.selectedPlugin}`);
         }
-        this._setPlugin();
+        this.initPlugin();
     }
 
-    _setPlugin() {
+    private initPlugin() {
         this.initGui(this.pluginsMap[params.selectedPlugin]);
-        this.refreshGroup(() => this.pluginsMap[params.selectedPlugin].update());
+        this.refreshGroup(() => this.pluginsMap[params.selectedPlugin].init());
         localStorage.setItem('selectedPlugin', params.selectedPlugin);
         log.debug(`Saved plugin selection: ${params.selectedPlugin}`);
     };
@@ -97,7 +154,7 @@ export class App {
         const sceneGui = this.gui.addFolder('Scene');
         sceneGui.add(params, 'enableFog').onChange(() => this._updateScene());
         sceneGui.add(params, 'enableShadows').onChange(() => this._updateScene());
-        sceneGui.add(params, 'selectedPlugin', Object.keys(this.pluginsMap)).onChange(() => this._setPlugin());
+        sceneGui.add(params, 'selectedPlugin', Object.keys(this.pluginsMap)).onChange(() => this.initPlugin());
         sceneGui.open();
 
         this.gui.add(this, 'saveStl');
@@ -120,7 +177,7 @@ export class App {
         }
     };
 
-    _setGroup(group: Three.Group) {
+    _setGroup(group: Group) {
         log.debug(`common._setGroup [${group}]`);
         if (group) {
             scene.add(group);
@@ -135,7 +192,7 @@ export class App {
     _initScene() {
         log.debug('common._initScene');
         // camera
-        camera = new Three.PerspectiveCamera(50, window.innerWidth / window.innerHeight, 0.01, 10000);
+        camera = new PerspectiveCamera(50, window.innerWidth / window.innerHeight, 0.01, 10000);
         const savedCamPos = localStorage.getItem('camPos');
         if (savedCamPos !== null) {
             const camPos = JSON.parse(savedCamPos);
@@ -145,7 +202,7 @@ export class App {
         }
 
         // renderer
-        renderer = new Three.WebGLRenderer({ antialias: true });
+        renderer = new WebGLRenderer({ antialias: true });
         renderer.setPixelRatio(window.devicePixelRatio);
         renderer.setSize(window.innerWidth, window.innerHeight);
         document.body.appendChild(renderer.domElement);
@@ -171,17 +228,17 @@ export class App {
     }
 
     _scene2() {
-        scene = new Three.Scene();
-        scene.background = new Three.Color( 0xAAAAAA );
+        scene = new Scene();
+        scene.background = new Color( 0xAAAAAA );
 
         lights = [];
         let light;
-        light = new Three.HemisphereLight(0x94CB9C, 0x3EB9C3, 0.6);
+        light = new HemisphereLight(0x94CB9C, 0x3EB9C3, 0.6);
         light.position.set(0, 10, 0);
         scene.add(light);
         lights.push(light);
 
-        light = new Three.DirectionalLight(0xFFFFFF, 0.25);
+        light = new DirectionalLight(0xFFFFFF, 0.25);
         light.position.set(5, 5, -7.5);
         light.shadow.mapSize.set(1024,1024);
         light.shadow.radius = 5;
@@ -199,8 +256,8 @@ export class App {
 
     _scene1() {
         // scene
-        scene = new Three.Scene();
-        scene.background = new Three.Color( 0xa0a0a0 );
+        scene = new Scene();
+        scene.background = new Color( 0xa0a0a0 );
 
         // light
         lights = [
@@ -209,23 +266,23 @@ export class App {
             [-300, CAM_HEIGHT, -300, 1.1],
 
         ].map(([x, y, z, intensity]) => {
-            const light = new Three.PointLight(0xffffff, intensity, 0);
+            const light = new PointLight(0xffffff, intensity, 0);
             light.position.set(x, y, z);
             scene.add(light);
             return light;
         });
 
         // permanent objects
-        ground = new Three.Mesh(
-            new Three.PlaneBufferGeometry( 10000, 10000 ),
-            new Three.MeshPhongMaterial( { color: 0x999999, depthWrite: false } ) );
+        ground = new Mesh(
+            new PlaneBufferGeometry( 10000, 10000 ),
+            new MeshPhongMaterial( { color: 0x999999, depthWrite: false } ) );
         ground.rotation.x = - Math.PI / 2;
         scene.add( ground );
     }
 
     _updateScene1() {
         // fog
-        scene.fog = params.enableFog ? new Three.FogExp2( 0xa0a0a0, 0.0005 ) : null;
+        scene.fog = params.enableFog ? new FogExp2( 0xa0a0a0, 0.0005 ) : null;
 
         // shadow
         renderer.shadowMap.enabled = params.enableShadows;

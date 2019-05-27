@@ -27,12 +27,12 @@ export class Sandbox extends AppPlugin {
     }
 
     createGui(gui: dat.GUI, refreshWith: Function): void {
-        const resetAll = refreshWith(() => this.update());
+        const resetAll = refreshWith(() => this.init());
         gui.add(this, 'selectedThing', Object.keys(thing.things)).onChange(resetAll);
         gui.add(this, 'showNormals').onChange(resetAll);
     }
 
-    update(): three.Group {
+    init(): three.Group {
 
         this.group = new three.Group();
         this.group.position.set(0, 300, 0);

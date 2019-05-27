@@ -44,7 +44,7 @@ export class Spiro extends AppPlugin {
     private dt = -1;
 
     createGui(gui: dat.GUI, refreshWith: Function): void {
-        const resetAll = refreshWith(() => this.update());
+        const resetAll = refreshWith(() => this.init());
         const resetModel = refreshWith(() => this.updateModel());
 
         gui.add(this, 'resolution', 1, 100).step(1).onChange(resetAll);
@@ -66,7 +66,7 @@ export class Spiro extends AppPlugin {
         gui.add(this, 'showWireframe').onChange(resetModel);
     }
 
-    update(): Group {
+    init(): Group {
         // const { bigR, lilR, resolution } = params;
         const { bigR, spinNumer, spinDenom, resolution } = this;
         const lilR = (spinNumer / spinDenom) * bigR;
