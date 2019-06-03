@@ -25,5 +25,8 @@
     "build-prod": "parcel build src/index.html"
   },
   "author": "",
-  "license": "ISC"
+  "license": "ISC",
+  "dependencies": {
+    "quadtree-lib": "^1.0.9"
+  }
 }

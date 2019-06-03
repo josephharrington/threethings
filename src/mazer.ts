@@ -13,8 +13,9 @@ import {
 import * as dat from 'dat.gui';
 
 import { AppPlugin } from './common';
-import {randomNormal} from "./util/random";
+import {Random} from "./util/random";
 import {closestPointOnSegment} from "./util/geometry";
+import Quadtree, {QuadtreeItem} from "quadtree-lib";
 
 const ITERATION_DELAY = 30;
 
@@ -53,13 +54,13 @@ export class Mazer extends AppPlugin {
         const init = refreshWith(() => this.init());
         const regenMesh = refreshWith(() => this.regenMesh());
 
-        gui.add(this, 'extrusionSegments', 5, 10000).step(5).onChange(regenMesh);
+        gui.add(this, 'extrusionSegments', 5, 100000).step(5).onChange(regenMesh);
         gui.add(this, 'radiusSegments', 1, 32).step(1).onChange(regenMesh);
         gui.add(this, 'radius', 1, 100).step(1).onChange(regenMesh);
         gui.add(this, 'closed').onChange(regenMesh);
         gui.add(this, 'showPts').onChange(regenMesh);
         gui.add(this, 'showWireframe').onChange(regenMesh);
-        gui.add(this, 'speed', 1, 20).step(1).onChange(regenMesh);
+        gui.add(this, 'speed', 1, 500).step(1).onChange(regenMesh);
         gui.add(this, 'meshType', this.MESH_TYPES).onChange(regenMesh);
 
         const mazeGui = gui.addFolder('Maze');
@@ -67,10 +68,11 @@ export class Mazer extends AppPlugin {
         mazeGui.__controllers.forEach(c => c.onChange(regenMesh));
         mazeGui.open();
 
-        gui.add(this, 'bigR', 10, 500).step(1).onChange(init);
-        gui.add(this, 'numPts', 1, 500).step(1).onChange(init);
+        gui.add(this, 'bigR', 10, 5000).step(1).onChange(init);
+        gui.add(this, 'numPts', 1, 1000).step(1).onChange(init);
         gui.add({init}, 'init');
         gui.add(this, 'iterate');
+        gui.add(this, 'iterateN');
         gui.add(this, 'toggleIteration');
     }
 
@@ -96,14 +98,18 @@ export class Mazer extends AppPlugin {
     }
 
     private iterate(numSteps=1) {
-        console.group();
+        // console.group();
         if (!this.maze) throw new Error('null maze');
         for (let i = 0; i < numSteps; i++) {
             this.maze.step();
-            console.log({numPts: this.maze.getCurves()[0].length});
+            // console.log({numPts: this.maze.getCurves()[0].length});
         }
-        console.groupEnd();
+        // console.groupEnd();
         this.regenMesh();
+    }
+
+    private iterateN() {
+        this.iterate(this.speed);
     }
 
     private toggleIteration(targetState?: boolean) {
@@ -135,13 +141,15 @@ export class Mazer extends AppPlugin {
 
     private createShapeGeometry(points: Vector3[]): Geometry | BufferGeometry {
         const to2d = (v: Vector3): Vector2 => new Vector2(v.x, v.z);
+        const totalThickness = 40;
+        const bevelRatio = 0.6;
         return (new ExtrudeBufferGeometry(new Shape(points.map(to2d)), {
             steps: 1,
-            curveSegments: 20,
-            depth: 20,
+            curveSegments: 2,
+            depth: totalThickness * (1-bevelRatio) / 2,
             bevelEnabled: true,
-            bevelThickness: 6 ,
-            bevelSegments: 3,
+            bevelThickness: totalThickness * bevelRatio / 4,
+            bevelSegments: 8,
         })).rotateX(Math.PI/2);
     }
 
@@ -156,12 +164,39 @@ export class Mazer extends AppPlugin {
     }
 
     private initialPoints(): Vector3[] {
+        return this.pointsCircle(this.bigR, this.numPts);
+        // return this.pointsRectangle(this.bigR, this.bigR, this.numPts);
+    }
+
+    private pointsCircle(radius: number, numPts: number): Vector3[] {
         const points: Vector3[] = [];
-        for (let i = 0; i < this.numPts; i++) {
-            const t = 2*Math.PI * i/this.numPts;
-            const x = this.bigR * Math.cos(t);
-            const y = this.bigR * Math.sin(t);
+        for (let i = 0; i < numPts; i++) {
+            const t = 2*Math.PI * i/numPts;
+            const x = radius * Math.cos(t);
+            const y = radius * Math.sin(t);
             points.push(new Vector3(x, 0, y));
+        }
+        return points;
+    }
+
+    private pointsRectangle(width: number, height: number, numPts: number): Vector3[] {
+        const points: Vector3[] = [];
+        const pNW = new Vector3(-width/2, 0, -height/2);
+        const pNE = new Vector3(width/2, 0, -height/2);
+        const pSE = new Vector3(width/2, 0, height/2);
+        const pSW = new Vector3(-width/2, 0, height/2);
+
+        for (let i = 0; i < numPts; i++) {
+            const t = i/numPts;
+            if (t < 0.25) {
+                points.push(pNW.clone().add(pNE.clone().multiplyScalar(t/0.25)));
+            } else if (t >= 0.25 && t < 0.5) {
+                points.push(pNE.clone().add(pSE.clone().multiplyScalar((t-0.25)/0.25)));
+            } else if (t >= 0.5 && t < 0.75) {
+                points.push(pSE.clone().add(pSW.clone().multiplyScalar((t-0.5)/0.25)));
+            } else {
+                points.push(pSW.clone().add(pNW.clone().multiplyScalar((t-0.75)/0.25)));
+            }
         }
         return points;
     }
@@ -181,8 +216,10 @@ class Maze {
     private SAMPLING_RATE = 1;
     private FAIRING_AMPLITUDE = 0.1;
     private ATTR_REPEL_AMPLITUDE = 1;
-    private kMax = 70;
+    private kMax = 50;
     private kMin = 5;
+    private rand = new Random();  // todo: seed
+    private segmentQuadtree = new Quadtree<IndexedPoint>({width: 1, height: 1});
 
     createGui(gui: dat.GUI): void {
         gui.add(this, 'N_MIN', 0, 30).step(1);
@@ -208,6 +245,7 @@ class Maze {
     step(): Vector3[] {
         const currPoints = this.curves[0].map(this.to2d);
         const nextPoints: Vector2[] = [];
+        const segmentQuadtree = this.initQuadtree(currPoints);
         for (let i = 0; i < currPoints.length; i++) {
             const pt = currPoints[i];
             const leftPt = currPoints[i-1] || currPoints[currPoints.length-1];
@@ -215,7 +253,7 @@ class Maze {
             const newPt = pt.clone()
                 .add(this.brownian(pt))
                 .add(this.fairing(pt, leftPt, rightPt))
-                .add(this.attractRepel(i, currPoints));
+                .add(this.attractRepel(i, currPoints, segmentQuadtree));
             nextPoints.push(newPt);
         }
         this.resample(nextPoints);
@@ -266,8 +304,8 @@ class Maze {
     }
 
     private rand2dVector(): Vector2 {
-        const x = randomNormal();  // todo: seed
-        const y = randomNormal();
+        const x = this.rand.nextNormal();
+        const y = this.rand.nextNormal();
         const v = new Vector2(x, y);
         return v.normalize();
     }
@@ -295,18 +333,51 @@ class Maze {
         return mid.sub(pt).multiplyScalar(this.fairingAmplitude(pt));
     }
 
-    private attractRepel(i: number, points: Vector2[]): Vector2 {
+    private minMax<T>(items: T[], getVal: (item:T) => number): [number, number] {
+        if (items.length == 0) {
+            throw new Error('cannot calculate min or max of empty list');
+        }
+        let min, max;
+        min = max = getVal(items[0]);
+        for (let i = 1; i < items.length; i++) {
+            const val = getVal(items[i]);
+            if (min > val) min = val;
+            if (max < val) max = val;
+        }
+        return [min, max];
+    };
+
+    private attractRepel(i: number, points: Vector2[], segmentQuadtree: Quadtree<IndexedPoint>): Vector2 {
         const pi = points[i];
         const segmentForceSum = new Vector2(0, 0);
-        for (let j = 1; j < points.length; j++) {  // todo: quadtree
-            if (Math.max(Math.abs(j-i), Math.abs(j+1-i)) <= this.N_MIN) {
+
+        const closeSegments = segmentQuadtree.colliding({
+            x: pi.x,
+            y: pi.y,
+            width: 0,
+            height: 0,
+        });
+
+        // console.log(closeSegments);
+        const len = points.length;
+        for (let segment of closeSegments) {
+            const j = segment.indexB;
+            const segmentSeparation = Math.min(
+                Math.max(
+                    Math.abs(j-i),
+                    Math.abs(j+1-i),
+                ),
+                Math.max(
+                    Math.abs(j-i+len),
+                    Math.abs(j+1-i+len),
+                ),
+            );
+            // console.log('d:' + segmentSeparation + ', len:' + len + ', i:' + i + ', j:' + j);
+            if (segmentSeparation <= this.N_MIN) {
                 continue;
             }
-
-            // todo: fast checks to determine if segment is too far away
-
-            const pjA = points[j-1];
-            const pjB = points[j];
+            const pjA = points[segment.indexA];
+            const pjB = points[segment.indexB];
             const {x: closestX, y: closestY} = closestPointOnSegment(pi, pjA, pjB);
             const xij = new Vector2(closestX, closestY);
 
@@ -314,12 +385,67 @@ class Maze {
                 continue;
             }
 
-            segmentForceSum.add(
-                this.forceFromSegment(pi, xij)
-            )
+            const f = this.forceFromSegment(pi, xij);
+            if (isNaN(f.length())) {
+                console.log({segment, i, j, xij});
+                console.log({m1: Math.abs(j-i), m2: Math.abs(j+1-i)});
+            }
+            segmentForceSum.add(f);
+            // segmentForceSum.add(
+            //     this.forceFromSegment(pi, xij)
+            // )
         }
 
+        // for (let j = 1; j < points.length; j++) {  // todo: quadtreec
+        //
+        //     // todo: fast checks to determine if segment is too far away
+        //
+        //     const pjA = points[j-1];
+        //     const pjB = points[j];
+        //     const {x: closestX, y: closestY} = closestPointOnSegment(pi, pjA, pjB);
+        //     const xij = new Vector2(closestX, closestY);
+        //
+        //     if (pi.clone().sub(xij).length() >= this.R1 * Math.min(this.delta(pi), this.delta(xij))) {
+        //         continue;
+        //     }
+        //
+        //     segmentForceSum.add(
+        //         this.forceFromSegment(pi, xij)
+        //     )
+        // }
+
         return segmentForceSum.multiplyScalar(this.attractRepelAmplitude(pi));
+    }
+
+    private initQuadtree(points: Vector2[]): Quadtree<IndexedPoint> {  // todo pass in segments?
+        const [xMin, xMax] = this.minMax(points, p => p.x);
+        const [yMin, yMax] = this.minMax(points, p => p.y);
+
+        this.segmentQuadtree.clear();
+        Object.assign(this.segmentQuadtree, {
+            x: Math.floor(xMin),
+            y: Math.floor(yMin),
+            width: Math.ceil(xMax - xMin),
+            height: Math.ceil(yMax - yMin),
+        });
+
+        for (let iB = 0; iB < points.length; iB++) {
+            const iA = iB === 0 ? points.length-1 : iB-1;
+            const p1 = points[iA];
+            const p2 = points[iB];
+            const [pXMin, pXMax] = this.minMax([p1, p2], p => p.x);
+            const [pYMin, pYMax] = this.minMax([p1, p2], p => p.y);
+            const pad = this.R1;
+            this.segmentQuadtree.push({
+                x: pXMin - pad,
+                y: pYMin - pad,
+                width: pXMax - pXMin + 2 * pad,
+                height: pYMax - pYMin + 2 * pad,
+                indexA: iA,
+                indexB: iB,
+            });
+        }
+        return this.segmentQuadtree;
     }
 
     private forceFromSegment(p: Vector2, x: Vector2): Vector2 {
@@ -358,4 +484,9 @@ class Maze {
     private attractRepelAmplitude(pt: Vector2): number {
         return this.ATTR_REPEL_AMPLITUDE;
     }
+}
+
+interface IndexedPoint extends QuadtreeItem {
+    indexA: number;
+    indexB: number;
 }
