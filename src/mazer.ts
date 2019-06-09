@@ -29,8 +29,8 @@ export class Mazer extends AppPlugin {
     isIterating = false;
 
     // gui parameters - defaults
-    numPts = 300;
-    bigR = 1000;
+    numPts = 75;
+    bigR = 420;
     extrusionSegments = 500;
     radiusSegments = 5;
     radius = 10;
@@ -131,6 +131,7 @@ export class Mazer extends AppPlugin {
     }
 
     private createGeometry(points: Vector3[]): Geometry | BufferGeometry {
+        this.controller!.setDebugOutput(`numPoints:${points.length}`);
         if (this.meshType === this.MESH_SHAPE) {
             return this.createShapeGeometry(points);
         } else if (this.meshType === this.MESH_TUBE) {
@@ -213,10 +214,10 @@ class Maze {
     private R1 = 100;
     private SIGMA = 1.1;
     private DELTA = 1;
-    private BROWNING_AMP = 3;
+    private BROWNING_AMP = 5;
     private SAMPLING_RATE = 1;
-    private FAIRING_AMPLITUDE = 0.1;
-    private ATTR_REPEL_AMPLITUDE = 1;
+    private FAIRING_AMPLITUDE = 0.35;
+    private ATTR_REPEL_AMPLITUDE = 2.5;
     private kMax = 50;
     private kMin = 5;
     private rand = new Random();  // todo: seed

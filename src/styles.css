@@ -8,3 +8,15 @@ canvas {
     height: 100%;
     display: block;
 }
+.debugOutput {
+    position: absolute;
+    width: 300px;
+    height: 100px;
+    top: 30px;
+    left: 30px;
+    background-color: rgba(0,0,0,.4);
+    color: white;
+}
+.debugOutput pre {
+    margin: 4px;
+}

@@ -27,6 +27,7 @@ import {collectEntries} from "./util/collections";
 
 export abstract class AppPlugin {
     private readonly WIREFRAME = 'wireframe';
+    protected controller: AppController|null = null;
 
     createGui(gui: dat.GUI, refreshWith: Function): void { }
     abstract init(): Group;
@@ -61,6 +62,10 @@ export abstract class AppPlugin {
         wireframeMesh.geometry = geom;
         wireframeMesh.visible = showWireframe;
     }
+
+    setController(controller: AppController) {
+        this.controller = controller;
+    }
 }
 
 export interface Geometric extends Object3D {
@@ -81,13 +86,28 @@ let scene: Scene,
 ;
 
 const params = {
-    enableFog: true,
+    enableFog: false,
     enableShadows: false,
     selectedPlugin: 'none',
 };
 
 const CAM_HEIGHT = 300;
 
+export class AppController {
+    private debugOutput: Element;
+
+    constructor(debugOutput: Element) {
+        this.debugOutput = debugOutput;
+    }
+
+    setDebugOutput(message: string) {
+        this.debugOutput.innerHTML = message;
+    }
+
+    appendDebugOutput(message: string) {
+        this.debugOutput.innerHTML += message;
+    }
+}
 
 export function dispose(obj: Object3D) {
     if (obj == null) {
@@ -107,6 +127,7 @@ export class App {
     gui: dat.GUI|null = null;
     group: Group|null = null;
     pluginsMap: {[key: string]: AppPlugin};
+    controller: AppController;
 
     // scene: Three.Scene;
     // renderer: Three.WebGLRenderer;
@@ -134,12 +155,16 @@ export class App {
             params.selectedPlugin = Object.keys(this.pluginsMap)[0];
             log.debug(`No saved plugin selection. Default: ${params.selectedPlugin}`);
         }
+        const debugOutput = this.initDebugInfo();
+        this.controller = new AppController(debugOutput);
         this.initPlugin();
     }
 
     private initPlugin() {
-        this.initGui(this.pluginsMap[params.selectedPlugin]);
-        this.refreshGroup(() => this.pluginsMap[params.selectedPlugin].init());
+        const plugin = this.pluginsMap[params.selectedPlugin];
+        plugin.setController(this.controller);
+        this.initGui(plugin);
+        this.refreshGroup(() => plugin.init());
         localStorage.setItem('selectedPlugin', params.selectedPlugin);
         log.debug(`Saved plugin selection: ${params.selectedPlugin}`);
     };
@@ -160,6 +185,15 @@ export class App {
         this.gui.add(this, 'saveStl');
     };
 
+    initDebugInfo() {
+        const input = document.createElement('div');
+        input.classList.add('debugOutput');
+        const debugOutput = document.createElement('pre');
+        debugOutput.innerHTML = '';
+        document.body.appendChild(input);
+        input.appendChild(debugOutput);
+        return debugOutput;
+    }
 
     refreshGroup(getNewGroup: Function) {
         console.group(`common.refreshGroup`);
@@ -282,7 +316,7 @@ export class App {
 
     _updateScene1() {
         // fog
-        scene.fog = params.enableFog ? new FogExp2( 0xa0a0a0, 0.0005 ) : null;
+        scene.fog = params.enableFog ? new FogExp2( 0xa0a0a0, 0.0002 ) : null;
 
         // shadow
         renderer.shadowMap.enabled = params.enableShadows;
