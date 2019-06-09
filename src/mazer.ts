@@ -30,7 +30,7 @@ export class Mazer extends AppPlugin {
 
     // gui parameters - defaults
     numPts = 300;
-    bigR = 330;
+    bigR = 1000;
     extrusionSegments = 500;
     radiusSegments = 5;
     radius = 10;
@@ -141,16 +141,17 @@ export class Mazer extends AppPlugin {
 
     private createShapeGeometry(points: Vector3[]): Geometry | BufferGeometry {
         const to2d = (v: Vector3): Vector2 => new Vector2(v.x, v.z);
-        const totalThickness = 40;
-        const bevelRatio = 0.6;
-        return (new ExtrudeBufferGeometry(new Shape(points.map(to2d)), {
-            steps: 1,
-            curveSegments: 2,
-            depth: totalThickness * (1-bevelRatio) / 2,
-            bevelEnabled: true,
-            bevelThickness: totalThickness * bevelRatio / 4,
-            bevelSegments: 8,
-        })).rotateX(Math.PI/2);
+        // const totalThickness = 40;
+        // const bevelRatio = 0.6;
+        // return (new ExtrudeBufferGeometry(new Shape(points.map(to2d)), {
+        //     steps: 1,
+        //     curveSegments: 2,
+        //     depth: totalThickness * (1-bevelRatio) / 2,
+        //     bevelEnabled: true,
+        //     bevelThickness: totalThickness * bevelRatio / 4,
+        //     bevelSegments: 8,
+        // })).rotateX(Math.PI/2);
+        return (new ShapeBufferGeometry(new Shape(points.map(to2d)), this.extrusionSegments)).rotateX(Math.PI/2);
     }
 
     private createTubeGeometry(points: Vector3[]): Geometry | BufferGeometry {
@@ -261,7 +262,6 @@ class Maze {
         return this.curves[0];
     }
 
-
     private resample(points: Vector2[]) {
         if (points.length <= 1) return;
         let i = 1;
@@ -292,8 +292,6 @@ class Maze {
     private dMin(p1: Vector2, p2: Vector2) {
         return this.kMin * this.samplingRate() * (this.delta(p1) + this.delta(p2)) / 2;
     }
-
-
 
     private to2d(v: Vector3): Vector2 {
         return new Vector2(v.x, v.z);
@@ -358,7 +356,6 @@ class Maze {
             height: 0,
         });
 
-        // console.log(closeSegments);
         const len = points.length;
         for (let segment of closeSegments) {
             const j = segment.indexB;
@@ -367,12 +364,11 @@ class Maze {
                     Math.abs(j-i),
                     Math.abs(j+1-i),
                 ),
-                Math.max(
+                Math.max(  // this handles when i and j span the segment connecting first and last indices
                     Math.abs(j-i+len),
                     Math.abs(j+1-i+len),
                 ),
             );
-            // console.log('d:' + segmentSeparation + ', len:' + len + ', i:' + i + ', j:' + j);
             if (segmentSeparation <= this.N_MIN) {
                 continue;
             }
@@ -384,35 +380,10 @@ class Maze {
             if (pi.clone().sub(xij).length() >= this.R1 * Math.min(this.delta(pi), this.delta(xij))) {
                 continue;
             }
-
-            const f = this.forceFromSegment(pi, xij);
-            if (isNaN(f.length())) {
-                console.log({segment, i, j, xij});
-                console.log({m1: Math.abs(j-i), m2: Math.abs(j+1-i)});
-            }
-            segmentForceSum.add(f);
-            // segmentForceSum.add(
-            //     this.forceFromSegment(pi, xij)
-            // )
+            segmentForceSum.add(
+                this.forceFromSegment(pi, xij)
+            )
         }
-
-        // for (let j = 1; j < points.length; j++) {  // todo: quadtreec
-        //
-        //     // todo: fast checks to determine if segment is too far away
-        //
-        //     const pjA = points[j-1];
-        //     const pjB = points[j];
-        //     const {x: closestX, y: closestY} = closestPointOnSegment(pi, pjA, pjB);
-        //     const xij = new Vector2(closestX, closestY);
-        //
-        //     if (pi.clone().sub(xij).length() >= this.R1 * Math.min(this.delta(pi), this.delta(xij))) {
-        //         continue;
-        //     }
-        //
-        //     segmentForceSum.add(
-        //         this.forceFromSegment(pi, xij)
-        //     )
-        // }
 
         return segmentForceSum.multiplyScalar(this.attractRepelAmplitude(pi));
     }
