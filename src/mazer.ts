@@ -12,10 +12,11 @@ import {
 } from "three";
 import * as dat from 'dat.gui';
 
-import { AppPlugin } from './common';
+import {AppPlugin} from './common';
 import {Random} from "./util/random";
 import {closestPointOnSegment} from "./util/geometry";
-import Quadtree, {QuadtreeItem} from "quadtree-lib";
+import {quadtree, Quadtree, QuadtreeInternalNode, QuadtreeLeaf} from 'd3-quadtree';
+import {DebugText} from './debugText';
 
 const ITERATION_DELAY = 30;
 
@@ -37,7 +38,7 @@ export class Mazer extends AppPlugin {
     closed = true;
     showPts = false;
     showWireframe = true;
-    speed = 5;
+    speed = 4;
     meshType = this.MESH_SHAPE;
 
     lineMaterial = new LineBasicMaterial({
@@ -98,6 +99,7 @@ export class Mazer extends AppPlugin {
     }
 
     private iterate(numSteps=1) {
+        DebugText.setDebugOutput('');
         // console.group();
         if (!this.maze) throw new Error('null maze');
         for (let i = 0; i < numSteps; i++) {
@@ -131,7 +133,7 @@ export class Mazer extends AppPlugin {
     }
 
     private createGeometry(points: Vector3[]): Geometry | BufferGeometry {
-        this.controller!.setDebugOutput(`numPoints:${points.length}`);
+        DebugText.appendDebugOutput(`numPoints:${points.length}`);
         if (this.meshType === this.MESH_SHAPE) {
             return this.createShapeGeometry(points);
         } else if (this.meshType === this.MESH_TUBE) {
@@ -221,7 +223,6 @@ class Maze {
     private kMax = 50;
     private kMin = 5;
     private rand = new Random();  // todo: seed
-    private segmentQuadtree = new Quadtree<IndexedPoint>({width: 1, height: 1});
 
     createGui(gui: dat.GUI): void {
         gui.add(this, 'N_MIN', 0, 30).step(1);
@@ -346,15 +347,37 @@ class Maze {
         return [min, max];
     };
 
-    private attractRepel(i: number, points: Vector2[], segmentQuadtree: Quadtree<IndexedPoint>): Vector2 {
+    private attractRepel(i: number, points: Vector2[], segmentQuadtree: RectQuadtree<Segment>): Vector2 {
         const pi = points[i];
         const segmentForceSum = new Vector2(0, 0);
 
-        const closeSegments = segmentQuadtree.colliding({
-            x: pi.x,
-            y: pi.y,
-            width: 0,
-            height: 0,
+
+        const closeSegments: Segment[] = [];
+        const pad = this.R1;
+        const left = pi.x - pad;
+        const right = pi.x + pad;
+        const top = pi.y - pad;
+        const bottom = pi.y + pad;
+
+        segmentQuadtree.visit((segmentNode) => {
+            if (isLeafNode(segmentNode)) {  // leaf quad node
+                do {
+                    const bbox = segmentNode.bbox;
+                    if (!!bbox && bbox.x1 >= left && bbox.x0 <= right
+                        && bbox.y1 >= top && bbox.y0 <= bottom) {
+                        closeSegments.push(segmentNode.data);
+                    }
+                    if (isLeafNode(segmentNode.next)) {
+                        segmentNode = segmentNode.next;
+                    } else {
+                        break;
+                    }
+                } while (segmentNode);
+                return false;  // shouldn't matter -- no children
+            } else {
+                const bbox = segmentNode.bbox;
+                return !!bbox && (bbox.x0 > right || bbox.y0 > bottom || bbox.x1 < left || bbox.y1 < top);
+            }
         });
 
         const len = points.length;
@@ -389,35 +412,63 @@ class Maze {
         return segmentForceSum.multiplyScalar(this.attractRepelAmplitude(pi));
     }
 
-    private initQuadtree(points: Vector2[]): Quadtree<IndexedPoint> {  // todo pass in segments?
-        const [xMin, xMax] = this.minMax(points, p => p.x);
-        const [yMin, yMax] = this.minMax(points, p => p.y);
-
-        this.segmentQuadtree.clear();
-        Object.assign(this.segmentQuadtree, {
-            x: Math.floor(xMin),
-            y: Math.floor(yMin),
-            width: Math.ceil(xMax - xMin),
-            height: Math.ceil(yMax - yMin),
-        });
-
+    private initQuadtree(points: Vector2[]): RectQuadtree<Segment> {  // todo pass in segments?
+        const segments = [];
         for (let iB = 0; iB < points.length; iB++) {
             const iA = iB === 0 ? points.length-1 : iB-1;
             const p1 = points[iA];
             const p2 = points[iB];
-            const [pXMin, pXMax] = this.minMax([p1, p2], p => p.x);
-            const [pYMin, pYMax] = this.minMax([p1, p2], p => p.y);
-            const pad = this.R1;
-            this.segmentQuadtree.push({
-                x: pXMin - pad,
-                y: pYMin - pad,
-                width: pXMax - pXMin + 2 * pad,
-                height: pYMax - pYMin + 2 * pad,
+            segments.push({
+                p1,
+                p2,
                 indexA: iA,
                 indexB: iB,
             });
         }
-        return this.segmentQuadtree;
+        const segmentQuadtree: RectQuadtree<Segment> = quadtree<Segment>()
+            .x(s => (s.p1.x + s.p2.x)/2)
+            .y(s => (s.p1.y + s.p2.y)/2)
+            .addAll(segments);
+        this.addSegmentBBoxes(segmentQuadtree.root());
+        return segmentQuadtree
+    }
+
+    private addSegmentBBoxes(
+        segmentNode: RectQuadtreeInternalNode<Segment> | RectQuadtreeLeaf<Segment> | undefined
+    ): BoundingBox|undefined {
+        if (!segmentNode) {
+            return undefined;
+        }
+        if (isLeafNode(segmentNode)) {
+            segmentNode.bbox = this.getSegmentBoundingBox(segmentNode.data);
+            return segmentNode.bbox;
+        }
+
+        let linkNodeBBox: BoundingBox|undefined = undefined;
+        for (let childNodeBBox of segmentNode.map((n) => this.addSegmentBBoxes(n))) {
+            if (!childNodeBBox) {
+                continue;
+            }
+            if (!linkNodeBBox) {
+                linkNodeBBox = {...childNodeBBox};
+            } else {
+                linkNodeBBox.x0 = Math.min(linkNodeBBox.x0, childNodeBBox.x0);
+                linkNodeBBox.y0 = Math.min(linkNodeBBox.y0, childNodeBBox.y0);
+                linkNodeBBox.x1 = Math.max(linkNodeBBox.x1, childNodeBBox.x1);
+                linkNodeBBox.y1 = Math.max(linkNodeBBox.y1, childNodeBBox.y1);
+            }
+        }
+        segmentNode.bbox = linkNodeBBox;
+        return linkNodeBBox;
+    }
+
+    private getSegmentBoundingBox(segment: Segment): BoundingBox {
+        return {
+            x0: Math.min(segment.p1.x, segment.p2.x),
+            y0: Math.min(segment.p1.y, segment.p2.y),
+            x1: Math.max(segment.p1.x, segment.p2.x),
+            y1: Math.max(segment.p1.y, segment.p2.y),
+        };
     }
 
     private forceFromSegment(p: Vector2, x: Vector2): Vector2 {
@@ -451,6 +502,7 @@ class Maze {
     /** "ff: R2→[0; 1] allows the fairing to vary spatially" */
     private fairingAmplitude(pt: Vector2): number {
         return this.FAIRING_AMPLITUDE;
+        // return this.FAIRING_AMPLITUDE * ((pt.x)/9000 + 1);
     }
 
     private attractRepelAmplitude(pt: Vector2): number {
@@ -458,7 +510,34 @@ class Maze {
     }
 }
 
-interface IndexedPoint extends QuadtreeItem {
+interface Segment {
+    p1: Vector2;
+    p2: Vector2;
     indexA: number;
     indexB: number;
+}
+
+export function isLeafNode<T>(node: QuadtreeInternalNode<T>|QuadtreeLeaf<T>|undefined): node is QuadtreeLeaf<T> {
+    return node !== undefined && node.length === undefined;
+}
+
+interface RectQuadtreeLeaf<T> extends QuadtreeLeaf<T> {
+    bbox?: BoundingBox;
+}
+
+interface RectQuadtreeInternalNode<T> extends QuadtreeInternalNode<T> {
+    bbox?: BoundingBox;
+}
+
+interface BoundingBox {
+    x0: number;
+    y0: number;
+    x1: number;
+    y1: number;
+}
+
+interface RectQuadtree<T> extends Quadtree<T> {
+    root(): RectQuadtreeInternalNode<T> | RectQuadtreeLeaf<T>;
+    visit(callback: (node: RectQuadtreeInternalNode<T> | RectQuadtreeLeaf<T>, x0: number, y0: number, x1: number, y1: number) => void | boolean): this;
+    visitAfter(callback: (node: RectQuadtreeInternalNode<T> | RectQuadtreeLeaf<T>, x0: number, y0: number, x1: number, y1: number) => void): this;
 }

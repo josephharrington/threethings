@@ -27,7 +27,6 @@ import {collectEntries} from "./util/collections";
 
 export abstract class AppPlugin {
     private readonly WIREFRAME = 'wireframe';
-    protected controller: AppController|null = null;
 
     createGui(gui: dat.GUI, refreshWith: Function): void { }
     abstract init(): Group;
@@ -62,10 +61,6 @@ export abstract class AppPlugin {
         wireframeMesh.geometry = geom;
         wireframeMesh.visible = showWireframe;
     }
-
-    setController(controller: AppController) {
-        this.controller = controller;
-    }
 }
 
 export interface Geometric extends Object3D {
@@ -93,22 +88,6 @@ const params = {
 
 const CAM_HEIGHT = 300;
 
-export class AppController {
-    private debugOutput: Element;
-
-    constructor(debugOutput: Element) {
-        this.debugOutput = debugOutput;
-    }
-
-    setDebugOutput(message: string) {
-        this.debugOutput.innerHTML = message;
-    }
-
-    appendDebugOutput(message: string) {
-        this.debugOutput.innerHTML += message;
-    }
-}
-
 export function dispose(obj: Object3D) {
     if (obj == null) {
         return;
@@ -127,18 +106,9 @@ export class App {
     gui: dat.GUI|null = null;
     group: Group|null = null;
     pluginsMap: {[key: string]: AppPlugin};
-    controller: AppController;
-
-    // scene: Three.Scene;
-    // renderer: Three.WebGLRenderer;
-    // camera: Three.Camera;
-    // ground: Three.Mesh;
-    // lights: Array<Three.Light>;
-    // controls: any;  // couldn't get OrbitControls working
 
     constructor(plugins: AppPlugin[]) {
         this._initDownload();
-        // this._link = document.createElement('a');
         this._initScene();
 
         this.pluginsMap = collectEntries(plugins, plugin => plugin.constructor.name);
@@ -155,14 +125,11 @@ export class App {
             params.selectedPlugin = Object.keys(this.pluginsMap)[0];
             log.debug(`No saved plugin selection. Default: ${params.selectedPlugin}`);
         }
-        const debugOutput = this.initDebugInfo();
-        this.controller = new AppController(debugOutput);
         this.initPlugin();
     }
 
     private initPlugin() {
         const plugin = this.pluginsMap[params.selectedPlugin];
-        plugin.setController(this.controller);
         this.initGui(plugin);
         this.refreshGroup(() => plugin.init());
         localStorage.setItem('selectedPlugin', params.selectedPlugin);
@@ -184,16 +151,6 @@ export class App {
 
         this.gui.add(this, 'saveStl');
     };
-
-    initDebugInfo() {
-        const input = document.createElement('div');
-        input.classList.add('debugOutput');
-        const debugOutput = document.createElement('pre');
-        debugOutput.innerHTML = '';
-        document.body.appendChild(input);
-        input.appendChild(debugOutput);
-        return debugOutput;
-    }
 
     refreshGroup(getNewGroup: Function) {
         console.group(`common.refreshGroup`);
