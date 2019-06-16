@@ -21,7 +21,7 @@ import {
 } from 'three';
 import * as log from 'loglevel';
 
-import {OrbitControls, STLExporter} from './three';
+import {OrbitControls, STLExporter, OBJExporter} from './three';
 import {collectEntries} from "./util/collections";
 
 
@@ -102,7 +102,8 @@ export function dispose(obj: Object3D) {
 
 export class App {
 
-    exporter: any = new STLExporter();  // couldn't get STLExporter type working
+    exporterStl: any = new STLExporter();  // couldn't get STLExporter type working
+    exporterObj: any = new OBJExporter();
     gui: dat.GUI|null = null;
     group: Group|null = null;
     pluginsMap: {[key: string]: AppPlugin};
@@ -150,6 +151,7 @@ export class App {
         sceneGui.open();
 
         this.gui.add(this, 'saveStl');
+        this.gui.add(this, 'saveObj');
     };
 
     refreshGroup(getNewGroup: Function) {
@@ -183,7 +185,12 @@ export class App {
     _initScene() {
         log.debug('common._initScene');
         // camera
-        camera = new PerspectiveCamera(50, window.innerWidth / window.innerHeight, 0.01, 10000);
+        camera = new PerspectiveCamera(
+            50,
+            window.innerWidth / window.innerHeight,
+            0.01,  // near
+            50000  // far
+        );
         const savedCamPos = localStorage.getItem('camPos');
         if (savedCamPos !== null) {
             const camPos = JSON.parse(savedCamPos);
@@ -193,7 +200,7 @@ export class App {
         }
 
         // renderer
-        renderer = new WebGLRenderer({ antialias: true });
+        renderer = new WebGLRenderer({ antialias: true, logarithmicDepthBuffer: true });
         renderer.setPixelRatio(window.devicePixelRatio);
         renderer.setSize(window.innerWidth, window.innerHeight);
         document.body.appendChild(renderer.domElement);
@@ -283,8 +290,13 @@ export class App {
     };
 
     saveStl() {
-        const result = this.exporter.parse(this.group);
+        const result = this.exporterStl.parse(this.group);
         this._saveString(result, 'box.stl');
+    };
+
+    saveObj() {
+        const result = this.exporterObj.parse(this.group);
+        this._saveString(result, 'box.obj');
     };
 
     startAnimating(fps: number) {
