@@ -1,5 +1,5 @@
 {
-  "name": "model",
+  "name": "threethings",
   "version": "1.0.0",
   "description": "",
   "main": "index.js",
@@ -26,6 +26,6 @@
     "start": "parcel src/index.html",
     "build-prod": "parcel build src/index.html"
   },
-  "author": "",
+  "author": "Joey Harrington <joey@harrington.pizza>",
   "license": "ISC"
 }
